@@ -1,64 +1,19 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import logo from '../../assets/images/Logo2.png';
 import Sidebar from '../Sidebar/Sidebar';
 import TopBar from '../TopBar/TopBar';
+import { getDashboardData } from '../../api/dashboardApi';
 import './Dashboard.css';
 
-const stats = [
-  {
-    label: 'Total Candidates',
-    value: '248',
-    icon: '👥',
-    sub: '↑ 12% vs last week',
-    subColor: '#22c55e',
-    bg: '#ede9ff',
-    iconColor: '#7c3aed',
-  },
-  {
-    label: 'Active Jobs',
-    value: '12',
-    icon: '💼',
-    sub: '6 Closing soon',
-    subColor: '#6b7280',
-    bg: '#e0f2fe',
-    iconColor: '#0ea5e9',
-  },
-  {
-    label: 'Selected',
-    value: '18',
-    icon: '✅',
-    sub: 'This Month',
-    subColor: '#6b7280',
-    bg: '#dcfce7',
-    iconColor: '#16a34a',
-  },
-  {
-    label: 'In Progress',
-    value: '67',
-    icon: '⏳',
-    sub: 'Across all progress',
-    subColor: '#6b7280',
-    bg: '#fef3c7',
-    iconColor: '#d97706',
-  },
+const defaultPipelineStages = [
+  { label: 'Applied', count: 0, color: '#7c3aed', width: '100%' },
+  { label: 'Screening', count: 0, color: '#3b82f6', width: '70%' },
+  { label: 'Technical Review', count: 0, color: '#22c55e', width: '50%' },
+  { label: 'HR Interview', count: 0, color: '#f59e0b', width: '32%' },
+  { label: 'Selected', count: 0, color: '#10b981', width: '22%' },
 ];
 
-const pipelineStages = [
-  { label: 'Applied', count: 98, color: '#7c3aed', width: '100%' },
-  { label: 'Screening', count: 55, color: '#3b82f6', width: '70%' },
-  { label: 'Technical Review', count: 32, color: '#22c55e', width: '50%' },
-  { label: 'HR Interview', count: 18, color: '#f59e0b', width: '32%' },
-  { label: 'Selected', count: 18, color: '#10b981', width: '22%' },
-];
-
-const chartData = [
-  { date: 'Apr 01', value: 12 },
-  { date: 'Apr 07', value: 28 },
-  { date: 'Apr 11', value: 20 },
-  { date: 'Apr 17', value: 25 },
-  { date: 'Apr 23', value: 22 },
-  { date: 'May 01', value: 45 },
-];
+const defaultChartData = [];
 
 function SparkLine({ data }) {
   const max = Math.max(...data.map((d) => d.value));
@@ -104,11 +59,89 @@ function SparkLine({ data }) {
 
 function Dashboard() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [summary, setSummary] = useState(null);
+  const [pipelineStages, setPipelineStages] = useState(defaultPipelineStages);
+  const [chartData, setChartData] = useState(defaultChartData);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   const toggleSidebar = () => {
     setIsSidebarOpen(prev => !prev);
   };
 
+  useEffect(() => {
+    const fetchDashboard = async () => {
+      try {
+        const data = await getDashboardData(30);
+        setSummary(data.summary);
+        setPipelineStages(data.pipelineStages || defaultPipelineStages);
+        setChartData(data.chartData || []);
+      } catch (err) {
+        console.error('Failed to load dashboard data', err);
+        setError('Unable to load dashboard information.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchDashboard();
+  }, []);
+
+  const stats = [
+    {
+      label: 'Total Candidates',
+      value: summary ? summary.totalCandidates : '0',
+      icon: '👥',
+      sub: '↑ 12% vs last week',
+      subColor: '#22c55e',
+      bg: '#ede9ff',
+      iconColor: '#7c3aed',
+    },
+    {
+      label: 'Active Jobs',
+      value: summary ? summary.activeJobs : '0',
+      icon: '💼',
+      sub: '6 Closing soon',
+      subColor: '#6b7280',
+      bg: '#e0f2fe',
+      iconColor: '#0ea5e9',
+    },
+    {
+      label: 'Selected',
+      value: summary ? summary.selectedCandidates : '0',
+      icon: '✅',
+      sub: 'This Month',
+      subColor: '#6b7280',
+      bg: '#dcfce7',
+      iconColor: '#16a34a',
+    },
+    {
+      label: 'In Progress',
+      value: summary ? summary.inProgressCandidates : '0',
+      icon: '⏳',
+      sub: 'Across all progress',
+      subColor: '#6b7280',
+      bg: '#fef3c7',
+      iconColor: '#d97706',
+    },
+  ];
+
+  const chartSeries = chartData.length > 0 ? chartData : [];
+
+  const stageColors = {
+    Applied: '#7c3aed',
+    Screening: '#3b82f6',
+    'Technical Review': '#22c55e',
+    'HR Interview': '#f59e0b',
+    Selected: '#10b981',
+  };
+
+  const maxPipelineCount = Math.max(...pipelineStages.map((stage) => stage.count), 1);
+  const pipelineStagesDisplay = pipelineStages.map((stage) => ({
+    ...stage,
+    color: stageColors[stage.label] || '#6b7280',
+    width: `${Math.max(14, Math.round((stage.count / maxPipelineCount) * 100))}%`,
+  }));
 
   return (
     <div className="app-layout">
@@ -126,24 +159,31 @@ function Dashboard() {
             </div>
           </div>
 
-          <div className="stats-grid">
-            {stats.map((s) => (
-              <div className="stat-card" key={s.label} style={{ background: s.bg }}>
-                <div className="stat-icon" style={{ color: s.iconColor }}>{s.icon}</div>
-                <div className="stat-info">
-                  <p className="stat-label">{s.label}</p>
-                  <p className="stat-value">{s.value}</p>
-                  <p className="stat-sub" style={{ color: s.subColor }}>{s.sub}</p>
-                </div>
+          {error && <div className="dashboard-error">{error}</div>}
+          {isLoading ? (
+            <div className="dashboard-loading">Loading dashboard data...</div>
+          ) : (
+            <>
+              <div className="stats-grid">
+                {stats.map((s) => (
+                  <div className="stat-card" key={s.label} style={{ background: s.bg }}>
+                    <div className="stat-icon" style={{ color: s.iconColor }}>{s.icon}</div>
+                    <div className="stat-info">
+                      <p className="stat-label">{s.label}</p>
+                      <p className="stat-value">{s.value}</p>
+                      <p className="stat-sub" style={{ color: s.subColor }}>{s.sub}</p>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </>
+          )}
 
           <div className="dashboard-bottom">
             <div className="pipeline-card">
               <h3 className="card-title">Pipeline Overview</h3>
               <div className="funnel-container">
-                {pipelineStages.map((stage, i) => (
+                {pipelineStagesDisplay.map((stage) => (
                   <div className="funnel-row" key={stage.label}>
                     <div className="funnel-bar-wrap">
                       <div
@@ -173,9 +213,9 @@ function Dashboard() {
                 </select>
               </div>
               <div className="chart-wrap">
-                <SparkLine data={chartData} />
+                <SparkLine data={chartSeries} />
                 <div className="chart-x-labels">
-                  {chartData.map((d) => (
+                  {chartSeries.map((d) => (
                     <span key={d.date}>{d.date}</span>
                   ))}
                 </div>

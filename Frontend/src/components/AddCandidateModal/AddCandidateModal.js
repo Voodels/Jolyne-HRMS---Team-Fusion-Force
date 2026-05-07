@@ -1,6 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import './AddCandidateModal.css';
+import { getJobTitles } from '../../api/jobApi';
 
 const BASE_URL = process.env.REACT_APP_API_BASE_URL;
 
@@ -74,8 +75,22 @@ function AddCandidateModal({ isOpen, onClose, onAdd, editData }) {
   const [uploading, setUploading] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [jobOptions, setJobOptions] = useState([]);
 
   const isEdit = !!editData;
+
+  useEffect(() => {
+    const loadJobOptions = async () => {
+      try {
+        const titles = await getJobTitles();
+        setJobOptions(titles);
+      } catch (err) {
+        console.error('Failed to load job options', err);
+      }
+    };
+
+    loadJobOptions();
+  }, []);
 
   // ---------------- PREFILL ----------------
   useEffect(() => {
@@ -487,13 +502,28 @@ const handleSubmit = async (e) => {
             onChange={handleChange}
           />
 
-          <input
-            type="text"
-            name="jobTitle"
-            placeholder="Job Role"
-            value={form.jobTitle}
-            onChange={handleChange}
-          />
+          {jobOptions.length > 0 ? (
+            <select
+              name="department"
+              value={form.department}
+              onChange={handleChange}
+              required
+            >
+              <option value="">Select Job Role</option>
+              {jobOptions.map((title) => (
+                <option key={title} value={title}>{title}</option>
+              ))}
+            </select>
+          ) : (
+            <input
+              type="text"
+              name="department"
+              placeholder="Job Role"
+              value={form.department}
+              onChange={handleChange}
+              required
+            />
+          )}
 
           {/* <input
             type="text"

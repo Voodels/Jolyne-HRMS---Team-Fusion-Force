@@ -2,15 +2,19 @@ import { useState, useEffect } from 'react';
 import Sidebar from '../Sidebar/Sidebar';
 import TopBar from '../TopBar/TopBar';
 import AddJobModal from '../AddJobModal/AddJobModal'; // ✅ import modal
+import { getJobs, createJob, deleteJob } from '../../api/jobApi';
 import './Jobs.css';
 
 function Jobs() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [jobs, setJobs] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   const [search, setSearch] = useState('');
   const [managerFilter, setManagerFilter] = useState('All Managers');
   const [sortBy, setSortBy] = useState('Latest');
+  const [managers, setManagers] = useState(['All Managers']);
 
   const [activeMenuId, setActiveMenuId] = useState(null);
 
@@ -35,15 +39,64 @@ function Jobs() {
     };
   }, []);
 
+  useEffect(() => {
+    const fetchJobs = async () => {
+      try {
+        const data = await getJobs();
+        setJobs(data);
+        
+        // Extract unique managers from jobs data
+        const uniqueManagers = ['All Managers', ...new Set(data.map(job => job.manager))];
+        setManagers(uniqueManagers);
+      } catch (err) {
+        console.error('Failed to load jobs', err);
+        setError('Unable to load jobs.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchJobs();
+  }, []);
+
   // ✅ Add Job FROM MODAL
-  const handleAddJob = (newJob) => {
-    setJobs(prev => [...prev, newJob]);
+  const handleAddJob = async (newJob) => {
+    try {
+      const created = await createJob({
+        title: newJob.title,
+        manager: newJob.manager,
+        fileName: newJob.fileName,
+        description: newJob.description || '',
+      });
+      setJobs(prev => [...prev, created]);
+      
+      // Update managers list if new manager is added
+      setManagers(prev => {
+        const newManagers = ['All Managers', ...new Set([...prev.slice(1), created.manager])];
+        return newManagers;
+      });
+    } catch (err) {
+      console.error('Failed to add job', err);
+      setError('Unable to add job.');
+    }
   };
 
   // ✅ Delete
-  const handleDelete = (id) => {
-    setJobs(prev => prev.filter(j => j.id !== id));
-    setActiveMenuId(null);
+  const handleDelete = async (id) => {
+    try {
+      await deleteJob(id);
+      setJobs(prev => {
+        const updatedJobs = prev.filter(j => j.id !== id);
+        // Update managers list
+        const uniqueManagers = ['All Managers', ...new Set(updatedJobs.map(job => job.manager))];
+        setManagers(uniqueManagers);
+        return updatedJobs;
+      });
+      setActiveMenuId(null);
+    } catch (err) {
+      console.error('Failed to delete job', err);
+      setError('Unable to delete job.');
+    }
   };
 
   const handleView = (job) => {
@@ -91,11 +144,12 @@ function Jobs() {
               <div className="jobs-filters">
                 <select
                   className="filter-select"
+                  value={managerFilter}
                   onChange={(e) => setManagerFilter(e.target.value)}
                 >
-                  <option>All Managers</option>
-                  <option>HR Manager</option>
-                  <option>Tech Lead</option>
+                  {managers.map(manager => (
+                    <option key={manager} value={manager}>{manager}</option>
+                  ))}
                 </select>
 
                 <select
@@ -130,9 +184,12 @@ function Jobs() {
             </div>
           </div>
 
-          {/* TABLE */}
-          <div className="jobs-table-wrap">
-            <table className="jobs-table">
+          {error && <div className="jobs-error">{error}</div>}
+          {isLoading ? (
+            <div className="jobs-loading">Loading jobs...</div>
+          ) : (
+            <div className="jobs-table-wrap">
+              <table className="jobs-table">
               <thead>
                 <tr>
                   <th>Job Name</th>
@@ -203,9 +260,10 @@ function Jobs() {
               </tbody>
             </table>
           </div>
+          )}
 
           {/* EMPTY */}
-          {filtered.length === 0 && (
+          {(!isLoading && filtered.length === 0) && (
             <p className="no-data">No jobs found</p>
           )}
 

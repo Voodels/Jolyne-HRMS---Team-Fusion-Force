@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Sidebar from '../Sidebar/Sidebar';
 import TopBar from '../TopBar/TopBar';
 import AddCandidateModal from '../AddCandidateModal/AddCandidateModal';
+import { getJobTitles } from '../../api/jobApi';
 import './Candidates.css';
 
 // ✅ ENV BASE URL
@@ -15,6 +16,7 @@ function Candidates() {
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [candidates, setCandidates] = useState([]);
+  const [jobTitles, setJobTitles] = useState([]);
 
   const [search, setSearch] = useState('');
   const [jobFilter, setJobFilter] = useState('All Jobs');
@@ -105,7 +107,17 @@ function Candidates() {
 
   useEffect(() => {
     fetchCandidates();
+    fetchJobTitles();
   }, []);
+
+  const fetchJobTitles = async () => {
+    try {
+      const titles = await getJobTitles();
+      setJobTitles(titles);
+    } catch (err) {
+      console.error('Failed to load job titles', err);
+    }
+  };
 
   // ---------------- SEARCH ----------------
   const handleSearch = async (value) => {
@@ -226,9 +238,9 @@ const clearNotifications = () => {
               <div className="candidates-filters">
                 <select className="filter-select" onChange={(e) => setJobFilter(e.target.value)}>
                   <option>All Jobs</option>
-                  <option>ENGINEERING</option>
-                  <option>HR</option>
-                  <option>SALES</option>
+                  {jobTitles.map((title) => (
+                    <option key={title}>{title}</option>
+                  ))}
                 </select>
 
                 <select className="filter-select" onChange={(e) => setStageFilter(e.target.value)}>

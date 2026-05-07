@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import Sidebar from '../Sidebar/Sidebar';
 import TopBar from '../TopBar/TopBar';
 import { useState, useEffect } from 'react';
+import { getJobTitles } from '../../api/jobApi';
 import './Pipeline.css';
 
 // ✅ ENV
@@ -14,6 +15,7 @@ function Pipeline() {
   const [search, setSearch] = useState('');
   const [jobFilter, setJobFilter] = useState('All Jobs');
   const [stageFilter, setStageFilter] = useState('All Stages');
+  const [jobOptions, setJobOptions] = useState(['All Jobs']);
 
   const [candidates, setCandidates] = useState([]);
 
@@ -48,6 +50,21 @@ function Pipeline() {
 
   useEffect(() => {
     fetchCandidates();
+  }, []);
+
+  // Fetch job titles for dropdown
+  useEffect(() => {
+    const fetchJobTitles = async () => {
+      try {
+        const titles = await getJobTitles();
+        setJobOptions(['All Jobs', ...titles]);
+      } catch (err) {
+        console.error('Failed to load job titles', err);
+        setJobOptions(['All Jobs']);
+      }
+    };
+
+    fetchJobTitles();
   }, []);
 
   // ---------------- STAGE FORMAT ----------------
@@ -135,11 +152,10 @@ function Pipeline() {
                 />
               </div>
 
-              <select onChange={(e) => setJobFilter(e.target.value)}>
-                <option>All Jobs</option>
-                <option>ENGINEERING</option>
-                <option>HR</option>
-                <option>SALES</option>
+              <select value={jobFilter} onChange={(e) => setJobFilter(e.target.value)}>
+                {jobOptions.map(job => (
+                  <option key={job} value={job}>{job}</option>
+                ))}
               </select>
 
               <select onChange={(e) => setStageFilter(e.target.value)}>
