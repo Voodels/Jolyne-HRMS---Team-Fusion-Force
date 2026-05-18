@@ -39,7 +39,7 @@ function Sidebar({ isOpen }) {
       <div className="sidebar-user">
         <div className="sidebar-avatar">RK</div>
         <div className="sidebar-user-info">
-          <p className="sidebar-user-name">Rahul Kumar</p>
+          <p className="sidebar-user-name">Minal Agrawal</p>
           <p className="sidebar-user-role">Recruiter</p>
         </div>
       </div>

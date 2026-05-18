@@ -5,71 +5,22 @@ import { getJobTitles } from '../../api/jobApi';
 
 const BASE_URL = process.env.REACT_APP_API_BASE_URL;
 
-function AddCandidateModal({ isOpen, onClose, onAdd, editData }) {
-
-  const [form, setForm] = useState({
-  // ===== BASIC =====
-  fullName: '',
+const INITIAL_FORM = {
+  name: '',
   firstName: '',
   middleName: '',
   lastName: '',
   email: '',
-  phone: '',
-  alternatePhone: '',
-  dateOfBirth: '',
-  gender: '',
-
-  // ===== LOCATION =====
-  addressFull: '',
-  city: '',
-  state: '',
-  country: '',
-  pincode: '',
-  location: '',
-
-  // ===== LINKS =====
-  linkedinUrl: '',
-  githubUrl: '',
-  portfolioUrl: '',
-  websiteUrl: '',
-  otherLinks: [],
-
-  // ===== SUMMARY =====
-  summaryText: '',
-  careerObjective: '',
-
-  // ===== PROFESSIONAL =====
-  yearsOfExperience: 0,
-  totalExperienceYears: 0,
-  currentJobTitle: '',
-  currentCompany: '',
-  currentCtc: '',
-  highestEducation: '',
-  primarySkill: '',
-  domain: '',
   department: '',
+  resume: null,
+  // keep other fields if needed but initialize minimally
+  resumeUrl: '',
+  currentStage: 'APPLIED'
+};
 
-  // ===== ARRAYS (IMPORTANT) =====
-  educationDetails: [],
-  experienceDetails: [],
-  projects: [],
-  skillsDetailed: [],
-  achievements: [],
-  certifications: [],
-  positions: [],
-  codingProfiles: [],
-  languages: [],
-  publications: [],
-  activities: [],
-  sectionName: [],
-  sectionData: [],
+function AddCandidateModal({ isOpen, onClose, onAdd, editData }) {
 
-  // ===== PIPELINE =====
-  currentStage: 'APPLIED',
-
-  // ===== FILE =====
-  resume: null
-  });
+  const [form, setForm] = useState(INITIAL_FORM);
 
   const [resumeUrl, setResumeUrl] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -123,7 +74,7 @@ function AddCandidateModal({ isOpen, onClose, onAdd, editData }) {
   if (!isOpen) return null;
 
   // ---------------- INPUT ----------------
-  const handleChange = (e) => {
+  const handleChange = async (e) => {
     const { name, value, files } = e.target;
 
     if (name === 'resume') {
@@ -131,8 +82,8 @@ function AddCandidateModal({ isOpen, onClose, onAdd, editData }) {
       setForm({ ...form, resume: file });
 
       // 🔥 Upload + Parse both
-      handleFileUpload(file);
-      parseResume(file);
+      await handleFileUpload(file);
+      await parseResume(file);
 
     } else {
       setForm({ ...form, [name]: value });
@@ -367,83 +318,16 @@ const handleSubmit = async (e) => {
   try {
     setLoading(true);
 
+
+    // Minimal payload: frontend should only send name, email, department, resumeUrl
     const payload = {
-      // ---------------- BASIC ----------------
-      firstName: form.firstName,
-      middleName: form.middleName,
-      lastName: form.lastName,
       name: form.name,
-
       email: form.email,
-      phone: form.phone,
-      alternatePhone: form.alternatePhone,
-      dateOfBirth: form.dateOfBirth,
-      gender: form.gender,
-
-      // ---------------- LOCATION ----------------
-      addressFull: form.addressFull,
-      city: form.city,
-      state: form.state,
-      country: form.country,
-      pincode: form.pincode,
-      location: form.location,
-
-      // ---------------- LINKS ----------------
-      linkedinUrl: form.linkedinUrl,
-      githubUrl: form.githubUrl,
-      portfolioUrl: form.portfolioUrl,
-      websiteUrl: form.websiteUrl,
-      otherLinks: form.otherLinks,
-
-      // ---------------- SUMMARY ----------------
-      summaryText: form.summaryText,
-      careerObjective: form.careerObjective,
-
-      // ---------------- EXPERIENCE ----------------
-      totalExperienceYears: form.totalExperienceYears,
-      yearsOfExperience: form.yearsOfExperience,
-
-      currentJobTitle: form.currentJobTitle,
-      currentCompany: form.currentCompany,
-      domain: form.domain,
-
-      // ---------------- EDUCATION ----------------
-      highestEducation: form.highestEducation,
-      educationDetails: form.educationDetails,
-
-      // ---------------- SKILLS ----------------
-      primarySkill: form.primarySkill,
-      skills: form.skills,                // string (UI)
-      skillsDetailed: form.skillsDetailed, // array (REAL DATA)
-
-      // ---------------- EXPERIENCE DETAILS ----------------
-      experienceDetails: form.experienceDetails,
-
-      // ---------------- PROJECTS ----------------
-      projects: form.projects,
-
-      // ---------------- EXTRA ----------------
-      achievements: form.achievements,
-      certifications: form.certifications,
-      positions: form.positions,
-      codingProfiles: form.codingProfiles,
-      languages: form.languages,
-      publications: form.publications,
-      activities: form.activities,
-
-      // ---------------- SECTION RAW ----------------
-      sectionName: form.sectionName,
-      sectionData: form.sectionData,
-
-      // ---------------- PIPELINE ----------------
       department: form.department,
-      currentStage: form.currentStage,
-
-      // ---------------- RESUME ----------------
       resumeUrl: resumeUrl,
     };
 
-    let url = `${BASE_URL}/candidates/full`;
+    let url = `${BASE_URL}/candidates`;
     let method = "POST";
 
     if (isEdit) {
@@ -464,8 +348,8 @@ const handleSubmit = async (e) => {
     onAdd();
     onClose();
 
-    // ✅ Reset (important for structured forms)
-    setForm({});
+    // ✅ Reset to initial minimal form
+    setForm(INITIAL_FORM);
     setResumeUrl("");
 
   } catch (err) {

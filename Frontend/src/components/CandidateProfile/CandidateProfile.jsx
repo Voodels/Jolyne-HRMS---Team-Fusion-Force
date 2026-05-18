@@ -198,7 +198,7 @@ const resumeUrl = candidate?.resumeUrl;
               <div className="profile-big-avatar">{getInitials()}</div>
 
               <div className="profile-hero-info">
-                <h2 className="profile-name">{candidate.fullName}</h2>
+                <h2 className="profile-name">{candidate.firstName} {candidate.lastName}</h2>
                 <p className="profile-contact">
                   {candidate.email} · {candidate.phone}
                 </p>
