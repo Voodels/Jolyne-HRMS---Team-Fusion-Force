@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom';
 import './Sidebar.css';
 
 const navItems = [
+  { label: 'Welcome', icon: '⌂', path: '/home' },
   { label: 'Dashboard', icon: '⊞', path: '/dashboard' },
   { label: 'Candidates', icon: '👤', path: '/candidates' },
   { label: 'Jobs', icon: '💼', path: '/jobs' },

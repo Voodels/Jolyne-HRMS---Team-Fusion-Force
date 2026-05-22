@@ -15,6 +15,7 @@ try:
     from langchain_google_genai.chat_models import ChatGoogleGenerativeAIError
     from langchain_groq import ChatGroq
     from langchain_ollama import ChatOllama
+    from langchain_openai import ChatOpenAI
     from langchain_core.messages import HumanMessage
     from langchain_postgres import PostgresChatMessageHistory
     from langchain_community.utilities import SQLDatabase
@@ -26,7 +27,7 @@ except ImportError as exc:
     raise SystemExit(
         "Missing optional packages. Install with: "
         "pip install langchain langgraph langchain-community \"langchain[google-genai]\" "
-        "langchain-postgres langchain-ollama sqlalchemy psycopg2-binary psycopg"
+        "langchain-openai langchain-postgres langchain-ollama sqlalchemy psycopg2-binary psycopg"
     ) from exc
 
 
@@ -37,6 +38,9 @@ class Settings:
     ollama_base_url: Optional[str]
     groq_model: str
     gemini_model: str
+    openai_model: str
+    openai_base_url: Optional[str]
+    openai_api_key: Optional[str]
     langsmith_api_key: Optional[str]
     google_api_key: Optional[str]
     groq_api_key: Optional[str]
@@ -61,6 +65,9 @@ def load_settings() -> Settings:
         ollama_base_url=os.getenv("OLLAMA_BASE_URL"),
         groq_model=os.getenv("GROQ_MODEL", "llama-3.1-8b-instant"),
         gemini_model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
+        openai_model=os.getenv("OPENAI_MODEL", "gemini-cli"),
+        openai_base_url=os.getenv("OPENAI_BASE_URL"),
+        openai_api_key=os.getenv("OPENAI_API_KEY"),
         langsmith_api_key=os.getenv("LANGSMITH_API_KEY"),
         google_api_key=os.getenv("GOOGLE_API_KEY"),
         groq_api_key=os.getenv("GROQ_API_KEY"),
@@ -80,6 +87,8 @@ def validate_settings(settings: Settings) -> None:
         missing.append("GOOGLE_API_KEY")
     if settings.model_provider == "groq" and not settings.groq_api_key:
         missing.append("GROQ_API_KEY")
+    if settings.model_provider == "openai_compat" and not settings.openai_base_url:
+        missing.append("OPENAI_BASE_URL")
     if not settings.database_url:
         missing.append("NEON_DATABASE_URL")
     if missing:
@@ -114,6 +123,14 @@ def init_model(settings: Settings) -> Any:
         )
     if settings.model_provider == "groq":
         return ChatGroq(model=settings.groq_model, temperature=0)
+    if settings.model_provider == "openai_compat":
+        api_key = settings.openai_api_key or "local-key"
+        return ChatOpenAI(
+            model=settings.openai_model,
+            base_url=settings.openai_base_url,
+            api_key=api_key,
+            temperature=0,
+        )
     return ChatGoogleGenerativeAI(model=settings.gemini_model, temperature=0)
 
 

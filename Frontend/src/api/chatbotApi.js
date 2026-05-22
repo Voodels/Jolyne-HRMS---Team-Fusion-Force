@@ -47,3 +47,10 @@ export const refreshSchema = async () => {
   });
   return handleResponse(res);
 };
+
+/** Neon `candidates` vs Chroma RAG index (SQL-Agent). */
+export const fetchDataSourcesInspect = async ({ limit = 50 } = {}) => {
+  const params = new URLSearchParams({ limit: String(limit) });
+  const res = await fetch(`${BASE_URL}/debug/data-sources?${params}`);
+  return handleResponse(res);
+};

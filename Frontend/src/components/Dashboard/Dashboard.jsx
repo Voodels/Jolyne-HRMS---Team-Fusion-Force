@@ -1,63 +1,18 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import logo from '../../assets/images/Logo2.png';
 import Sidebar from '../Sidebar/Sidebar';
 import TopBar from '../TopBar/TopBar';
+import Loader from '../Loader/Loader';
 import './Dashboard.css';
 
-const stats = [
-  {
-    label: 'Total Candidates',
-    value: '248',
-    icon: '👥',
-    sub: '↑ 12% vs last week',
-    subColor: '#22c55e',
-    bg: '#ede9ff',
-    iconColor: '#7c3aed',
-  },
-  {
-    label: 'Active Jobs',
-    value: '12',
-    icon: '💼',
-    sub: '6 Closing soon',
-    subColor: '#6b7280',
-    bg: '#e0f2fe',
-    iconColor: '#0ea5e9',
-  },
-  {
-    label: 'Selected',
-    value: '18',
-    icon: '✅',
-    sub: 'This Month',
-    subColor: '#6b7280',
-    bg: '#dcfce7',
-    iconColor: '#16a34a',
-  },
-  {
-    label: 'In Progress',
-    value: '67',
-    icon: '⏳',
-    sub: 'Across all progress',
-    subColor: '#6b7280',
-    bg: '#fef3c7',
-    iconColor: '#d97706',
-  },
-];
+const BASE_URL = process.env.REACT_APP_API_BASE_URL;
 
-const pipelineStages = [
-  { label: 'Applied', count: 98, color: '#7c3aed', width: '100%' },
-  { label: 'Screening', count: 55, color: '#3b82f6', width: '70%' },
-  { label: 'Technical Review', count: 32, color: '#22c55e', width: '50%' },
-  { label: 'HR Interview', count: 18, color: '#f59e0b', width: '32%' },
-  { label: 'Selected', count: 18, color: '#10b981', width: '22%' },
-];
-
-const chartData = [
-  { date: 'Apr 01', value: 12 },
-  { date: 'Apr 07', value: 28 },
-  { date: 'Apr 11', value: 20 },
-  { date: 'Apr 17', value: 25 },
-  { date: 'Apr 23', value: 22 },
-  { date: 'May 01', value: 45 },
+const STAGE_CONFIG = [
+  { key: 'APPLIED', label: 'Applied', color: '#7c3aed' },
+  { key: 'SCREENING', label: 'Screening', color: '#3b82f6' },
+  { key: 'TECH_INTERVIEW', label: 'Tech Interview', color: '#22c55e' },
+  { key: 'HR_INTERVIEW', label: 'HR Interview', color: '#f59e0b' },
+  { key: 'SELECTED', label: 'Selected', color: '#10b981' },
 ];
 
 function SparkLine({ data }) {
@@ -102,13 +57,175 @@ function SparkLine({ data }) {
   );
 }
 
+function buildChartData(items, days, referenceDate) {
+  const dayMap = new Map();
+  for (let i = 0; i < days; i += 1) {
+    const day = new Date(referenceDate);
+    day.setDate(referenceDate.getDate() - (days - 1 - i));
+    const key = day.toISOString().slice(0, 10);
+    dayMap.set(key, { date: day, value: 0 });
+  }
+
+  items.forEach((candidate) => {
+    const date = candidate.createdAtDate;
+    if (!date) return;
+    const key = date.toISOString().slice(0, 10);
+    const entry = dayMap.get(key);
+    if (entry) {
+      entry.value += 1;
+    }
+  });
+
+  const entries = Array.from(dayMap.values());
+  const bucketSize = Math.max(1, Math.floor(entries.length / 6));
+  const buckets = [];
+  for (let i = 0; i < entries.length; i += bucketSize) {
+    const slice = entries.slice(i, i + bucketSize);
+    const total = slice.reduce((sum, item) => sum + item.value, 0);
+    const labelDate = slice[slice.length - 1]?.date || referenceDate;
+    const label = labelDate.toLocaleDateString('en-US', { month: 'short', day: '2-digit' });
+    buckets.push({ date: label, value: total });
+  }
+  return buckets.slice(-6);
+}
+
 function Dashboard() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [candidates, setCandidates] = useState([]);
+  const [totalCandidates, setTotalCandidates] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [chartRange, setChartRange] = useState(30);
 
   const toggleSidebar = () => {
     setIsSidebarOpen(prev => !prev);
   };
 
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        setLoading(true);
+        setError('');
+        const res = await fetch(`${BASE_URL}/candidates?page=0&size=1000&sort=createdAt,desc`);
+        if (!res.ok) {
+          throw new Error('Failed to load dashboard data');
+        }
+
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : data.content || [];
+        const total = Array.isArray(data) ? list.length : data.totalElements ?? list.length;
+
+        setCandidates(list);
+        setTotalCandidates(total);
+      } catch (err) {
+        console.error(err);
+        setError('Unable to load dashboard data.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, []);
+
+  const computed = useMemo(() => {
+    const now = new Date();
+    const normalizeStage = (stage) => (stage || '').toUpperCase();
+    const createdAtDate = (value) => {
+      if (!value) return null;
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? null : date;
+    };
+
+    const candidatesWithDates = candidates.map((candidate) => ({
+      ...candidate,
+      createdAtDate: createdAtDate(candidate.createdAt),
+    }));
+
+    const last7 = candidatesWithDates.filter((c) => c.createdAtDate && now - c.createdAtDate <= 7 * 24 * 60 * 60 * 1000);
+    const prev7 = candidatesWithDates.filter((c) => {
+      if (!c.createdAtDate) return false;
+      const diff = now - c.createdAtDate;
+      return diff > 7 * 24 * 60 * 60 * 1000 && diff <= 14 * 24 * 60 * 60 * 1000;
+    });
+
+    const selectedCount = candidates.filter((c) => normalizeStage(c.currentStage) === 'SELECTED').length;
+    const rejectedCount = candidates.filter((c) => normalizeStage(c.currentStage) === 'REJECTED').length;
+    const inProgressCount = candidates.filter((c) => {
+      const stage = normalizeStage(c.currentStage);
+      return stage && stage !== 'SELECTED' && stage !== 'REJECTED';
+    }).length;
+
+    const uniqueRoles = new Set(
+      candidates
+        .map((c) => c.currentJobTitle || c.department)
+        .filter((value) => value && String(value).trim().length > 0)
+    );
+
+    const last7Delta = last7.length - prev7.length;
+    const last7Prefix = last7Delta >= 0 ? '↑' : '↓';
+    const last7Color = last7Delta >= 0 ? '#22c55e' : '#ef4444';
+    const last7Label = `${last7Prefix} ${Math.abs(last7Delta)} vs last week`;
+
+    const stats = [
+      {
+        label: 'Total Candidates',
+        value: totalCandidates,
+        icon: '👥',
+        sub: last7Label,
+        subColor: last7Color,
+        bg: '#ede9ff',
+        iconColor: '#7c3aed',
+      },
+      {
+        label: 'Active Jobs',
+        value: uniqueRoles.size,
+        icon: '💼',
+        sub: `${uniqueRoles.size} roles in pipeline`,
+        subColor: '#6b7280',
+        bg: '#e0f2fe',
+        iconColor: '#0ea5e9',
+      },
+      {
+        label: 'Selected',
+        value: selectedCount,
+        icon: '✅',
+        sub: 'Currently selected',
+        subColor: '#6b7280',
+        bg: '#dcfce7',
+        iconColor: '#16a34a',
+      },
+      {
+        label: 'In Progress',
+        value: inProgressCount,
+        icon: '⏳',
+        sub: `${rejectedCount} rejected`,
+        subColor: '#6b7280',
+        bg: '#fef3c7',
+        iconColor: '#d97706',
+      },
+    ];
+
+    const stageCounts = STAGE_CONFIG.map((stage) => {
+      const count = candidates.filter((c) => normalizeStage(c.currentStage) === stage.key).length;
+      return { ...stage, count };
+    });
+    const maxStageCount = Math.max(1, ...stageCounts.map((stage) => stage.count));
+    const pipelineStages = stageCounts.map((stage) => ({
+      label: stage.label,
+      count: stage.count,
+      color: stage.color,
+      width: `${Math.max(6, Math.round((stage.count / maxStageCount) * 100))}%`,
+    }));
+
+    const chart = buildChartData(candidatesWithDates, chartRange, now);
+
+    return {
+      stats,
+      pipelineStages,
+      chartData: chart,
+    };
+  }, [candidates, totalCandidates, chartRange]);
 
   return (
     <div className="app-layout">
@@ -127,58 +244,84 @@ function Dashboard() {
           </div>
 
           <div className="stats-grid">
-            {stats.map((s) => (
-              <div className="stat-card" key={s.label} style={{ background: s.bg }}>
-                <div className="stat-icon" style={{ color: s.iconColor }}>{s.icon}</div>
-                <div className="stat-info">
-                  <p className="stat-label">{s.label}</p>
-                  <p className="stat-value">{s.value}</p>
-                  <p className="stat-sub" style={{ color: s.subColor }}>{s.sub}</p>
-                </div>
+            {loading ? (
+              <div className="dashboard-loader">
+                <Loader label="Loading dashboard..." />
               </div>
-            ))}
+            ) : (
+              computed.stats.map((s) => (
+                <div className="stat-card" key={s.label} style={{ background: s.bg }}>
+                  <div className="stat-icon" style={{ color: s.iconColor }}>{s.icon}</div>
+                  <div className="stat-info">
+                    <p className="stat-label">{s.label}</p>
+                    <p className="stat-value">{s.value}</p>
+                    <p className="stat-sub" style={{ color: s.subColor }}>{s.sub}</p>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
+
+          {error && (
+            <div className="dashboard-error">
+              {error}
+            </div>
+          )}
 
           <div className="dashboard-bottom">
             <div className="pipeline-card">
               <h3 className="card-title">Pipeline Overview</h3>
               <div className="funnel-container">
-                {pipelineStages.map((stage, i) => (
-                  <div className="funnel-row" key={stage.label}>
-                    <div className="funnel-bar-wrap">
-                      <div
-                        className="funnel-bar"
-                        style={{
-                          width: stage.width,
-                          background: stage.color,
-                        }}
-                      />
+                {loading ? (
+                  <Loader label="Loading pipeline..." />
+                ) : (
+                  computed.pipelineStages.map((stage) => (
+                    <div className="funnel-row" key={stage.label}>
+                      <div className="funnel-bar-wrap">
+                        <div
+                          className="funnel-bar"
+                          style={{
+                            width: stage.width,
+                            background: stage.color,
+                          }}
+                        />
+                      </div>
+                      <div className="funnel-label">
+                        <span>{stage.label}</span>
+                        <span className="funnel-count">{stage.count}</span>
+                      </div>
                     </div>
-                    <div className="funnel-label">
-                      <span>{stage.label}</span>
-                      <span className="funnel-count">{stage.count}</span>
-                    </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </div>
 
             <div className="chart-card">
               <div className="chart-header">
                 <h3 className="card-title">Candidates Added</h3>
-                <select className="chart-filter">
-                  <option>Last 30 Days</option>
-                  <option>Last 7 Days</option>
-                  <option>Last 3 Months</option>
+                <select
+                  className="chart-filter"
+                  value={chartRange}
+                  onChange={(e) => setChartRange(Number(e.target.value))}
+                >
+                  <option value={30}>Last 30 Days</option>
+                  <option value={7}>Last 7 Days</option>
+                  <option value={90}>Last 3 Months</option>
                 </select>
               </div>
               <div className="chart-wrap">
-                <SparkLine data={chartData} />
-                <div className="chart-x-labels">
-                  {chartData.map((d) => (
-                    <span key={d.date}>{d.date}</span>
-                  ))}
-                </div>
+                {loading ? (
+                  <Loader label="Loading trend..." />
+                ) : (
+                  <>
+                    <SparkLine data={computed.chartData} />
+                    <div className="chart-x-labels">
+                      {computed.chartData.map((d) => (
+                        <span key={d.date}>{d.date}</span>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>

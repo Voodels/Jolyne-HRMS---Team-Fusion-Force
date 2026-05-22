@@ -1,0 +1,219 @@
+.neon-chroma-main {
+  padding: 1.25rem 1.5rem 2rem;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+.neon-chroma-main h2 {
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: var(--color-navy);
+  margin-bottom: 0.35rem;
+}
+
+.neon-chroma-sub {
+  font-size: 0.9rem;
+  color: var(--color-text-secondary);
+  margin-bottom: 1rem;
+}
+
+.neon-chroma-sub a {
+  color: var(--color-primary);
+  font-weight: 500;
+}
+
+.neon-chroma-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.neon-chroma-toolbar label {
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}
+
+.neon-chroma-toolbar select {
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+}
+
+.neon-chroma-toolbar button {
+  padding: 0.45rem 1rem;
+  background: var(--color-primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.neon-chroma-toolbar button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.neon-chroma-error {
+  background: #fef2f2;
+  color: #b91c1c;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md);
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+
+.neon-chroma-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.neon-chroma-summary-card {
+  background: var(--color-white);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 0.85rem 1rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.neon-chroma-summary-card span {
+  display: block;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  margin-bottom: 0.25rem;
+}
+
+.neon-chroma-summary-card strong {
+  font-size: 1.25rem;
+  color: var(--color-navy);
+}
+
+.neon-chroma-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (max-width: 1024px) {
+  .neon-chroma-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.neon-chroma-panel {
+  background: var(--color-white);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  min-height: 200px;
+  overflow: hidden;
+}
+
+.neon-chroma-panel-head {
+  padding: 0.65rem 1rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-primary-light);
+  color: var(--color-navy);
+}
+
+.neon-chroma-table-wrap {
+  overflow: auto;
+  max-height: min(70vh, 640px);
+}
+
+.neon-chroma-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.neon-chroma-table th,
+.neon-chroma-table td {
+  padding: 0.5rem 0.65rem;
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: top;
+}
+
+.neon-chroma-table th {
+  position: sticky;
+  top: 0;
+  background: #fafafa;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.neon-chroma-table td.mono {
+  font-family: ui-monospace, monospace;
+  font-size: 0.75rem;
+  max-width: 280px;
+  word-break: break-word;
+}
+
+.neon-chroma-table td.preview {
+  max-width: 360px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--color-text-secondary);
+  line-height: 1.35;
+}
+
+.neon-chroma-diff {
+  margin-top: 1.25rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+@media (max-width: 900px) {
+  .neon-chroma-diff {
+    grid-template-columns: 1fr;
+  }
+}
+
+.neon-chroma-diff-panel {
+  background: var(--color-white);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  font-size: 0.85rem;
+}
+
+.neon-chroma-diff-panel h3 {
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+  color: var(--color-navy);
+}
+
+.neon-chroma-diff-panel ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: var(--color-text-secondary);
+  max-height: 160px;
+  overflow: auto;
+}
+
+.neon-chroma-diff-panel li {
+  margin-bottom: 0.2rem;
+  font-family: ui-monospace, monospace;
+  font-size: 0.78rem;
+}
+
+.neon-chroma-empty {
+  padding: 1.5rem;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}

@@ -6,8 +6,8 @@ import time
 import asyncio
 from functools import lru_cache
 from dataclasses import dataclass
-from typing import Any, Callable, Optional, Dict, Tuple
-from datetime import datetime, timedelta
+from typing import Any, Callable, Dict, List, Optional, Tuple
+from datetime import datetime, timedelta, timezone
 from threading import Lock
 
 from fastapi import FastAPI, HTTPException
@@ -37,6 +37,27 @@ from langgraph.prebuilt import create_react_agent
 from langgraph.checkpoint.memory import InMemorySaver
 from langchain_core.messages import ToolMessage, AIMessageChunk
 from langchain_core.runnables import RunnableConfig
+
+from rag_service import (
+    load_rag_settings,
+    init_rag_collection,
+    rag_search,
+    filter_matches,
+    filter_matches_by_db,
+    rag_answer,
+    combine_sql_and_rag,
+    clear_collection,
+    index_candidates_from_db,
+    index_candidates_since,
+    upsert_candidate_by_id,
+    delete_candidate_by_id,
+    reconcile_chroma_with_db,
+    fetch_max_candidate_updated_at,
+    fetch_neon_candidates_preview,
+    fetch_chroma_documents_preview,
+    chroma_collection_count,
+    id_sync_diff_samples,
+)
 
 
 # =========================
@@ -174,6 +195,10 @@ class Runtime:
     schema_snapshot: Optional[str] = None
     response_cache: Optional[ResponseCache] = None
     schema_monitor: Optional[SchemaMonitor] = None
+    rag_settings: Optional[Any] = None
+    rag_collection: Optional[Any] = None
+    rag_last_synced_at: Optional[datetime] = None
+    rag_sync_task: Optional[asyncio.Task] = None
 
 
 class StartResponse(BaseModel):
@@ -219,6 +244,56 @@ class RefreshSchemaOut(BaseModel):
     schema_cached: bool
     table_count: int
     auto_refresh_enabled: bool = True
+
+
+class RagSearchIn(BaseModel):
+    query: str = Field(min_length=1)
+    top_k: Optional[int] = None
+
+
+class RagSearchOut(BaseModel):
+    query: str
+    count: int
+    results: list[dict]
+
+
+class RagIndexIn(BaseModel):
+    limit: Optional[int] = None
+    rebuild: bool = False
+
+
+class RagIndexOut(BaseModel):
+    indexed: int
+    limit: int
+    rebuilt: bool
+
+
+class RagUpsertIn(BaseModel):
+    candidate_id: str = Field(min_length=1)
+
+
+class RagUpsertOut(BaseModel):
+    upserted: int
+    last_synced_at: Optional[str] = None
+
+
+class RagDeleteIn(BaseModel):
+    candidate_id: str = Field(min_length=1)
+
+
+class RagDeleteOut(BaseModel):
+    deleted: int
+
+
+class DataSourcesInspectOut(BaseModel):
+    neon_total: int
+    neon_sample: List[Dict[str, Any]]
+    chroma_enabled: bool
+    chroma_collection_name: Optional[str] = None
+    chroma_total: int
+    chroma_sample: List[Dict[str, Any]]
+    neon_ids_missing_in_chroma_sample: List[str]
+    chroma_ids_missing_in_neon_sample: List[str]
 
 
 class CacheStatsOut(BaseModel):
@@ -410,6 +485,88 @@ def is_read_only_sql(query: str) -> bool:
     return is_safe
 
 
+def _looks_like_sql_question(message: str) -> bool:
+    msg = message.lower()
+    strong_sql_hints = [
+        "count",
+        "average",
+        "sum",
+        "total",
+        "group by",
+        "order by",
+        "top",
+        "list",
+        "show all",
+        "how many",
+        "number of",
+        "between",
+        "before",
+        "after",
+    ]
+    return any(hint in msg for hint in strong_sql_hints)
+
+
+def _get_rag_matches(runtime: Runtime, message: str) -> list[dict]:
+    if not runtime.rag_collection or not runtime.rag_settings:
+        return []
+    matches = rag_search(runtime.rag_collection, message, runtime.rag_settings.top_k)
+    matches = filter_matches(matches, runtime.rag_settings.score_threshold)
+    return filter_matches_by_db(runtime.engine, matches)
+
+
+def _decide_route(runtime: Runtime, message: str) -> tuple[str, list[dict]]:
+    settings = runtime.rag_settings
+    if not settings or not runtime.rag_collection or not settings.enabled:
+        return "sql", []
+
+    mode = settings.mode
+    if mode in {"sql", "rag", "hybrid"}:
+        matches = _get_rag_matches(runtime, message) if mode != "sql" else []
+        return mode, matches
+
+    if _looks_like_sql_question(message):
+        return "sql", []
+
+    matches = _get_rag_matches(runtime, message)
+    if matches:
+        return "rag", matches
+    return "sql", []
+
+
+async def rag_sync_loop(runtime: Runtime) -> None:
+    interval = int(os.getenv("RAG_SYNC_INTERVAL_SECONDS", "30"))
+    limit = int(os.getenv("RAG_SYNC_LIMIT", "500"))
+    print(f"[RAG] Sync loop started. interval={interval}s limit={limit}")
+
+    while True:
+        try:
+            if not runtime.rag_collection or not runtime.rag_settings or not runtime.rag_settings.enabled:
+                await asyncio.sleep(interval)
+                continue
+
+            since = runtime.rag_last_synced_at or datetime.now(timezone.utc)
+            print(f"[RAG] Sync tick. since={since.isoformat()} limit={limit}")
+
+            indexed, max_updated_at = index_candidates_since(
+                runtime.rag_collection,
+                runtime.engine,
+                since,
+                limit,
+            )
+            print(f"[RAG] Sync upserted {indexed} documents.")
+            if max_updated_at:
+                runtime.rag_last_synced_at = max_updated_at
+                print(f"[RAG] last_synced_at updated to {max_updated_at.isoformat()}")
+
+            deleted = reconcile_chroma_with_db(runtime.rag_collection, runtime.engine)
+            if deleted:
+                print(f"[RAG] Sync reconciliation removed {deleted} orphan documents.")
+        except Exception as exc:
+            print(f"[RAG] Sync loop error: {exc}")
+
+        await asyncio.sleep(interval)
+
+
 def init_agent_runtime() -> Runtime:
     print("[DEBUG] Initializing Agent Runtime...")
     if load_dotenv:
@@ -481,6 +638,47 @@ def init_agent_runtime() -> Runtime:
     schema_monitor = SchemaMonitor(runtime, check_interval_seconds=60)
     runtime.schema_monitor = schema_monitor
     schema_monitor.start()
+
+    # Initialize RAG resources (optional)
+    rag_settings = load_rag_settings()
+    rag_collection = init_rag_collection(rag_settings)
+    runtime.rag_settings = rag_settings
+    runtime.rag_collection = rag_collection
+    runtime.rag_last_synced_at = (
+        fetch_max_candidate_updated_at(runtime.engine)
+        or datetime.fromtimestamp(0, tz=timezone.utc)
+    )
+    print(
+        "[RAG] last_synced_at initialized to "
+        f"{runtime.rag_last_synced_at.isoformat()}"
+    )
+
+    if rag_settings.enabled and rag_settings.auto_index and rag_collection:
+        try:
+            indexed, max_updated_at = index_candidates_from_db(
+                rag_collection,
+                runtime.engine,
+                rag_settings.index_limit,
+            )
+            runtime.rag_last_synced_at = (
+                max_updated_at
+                or fetch_max_candidate_updated_at(runtime.engine)
+                or datetime.fromtimestamp(0, tz=timezone.utc)
+            )
+            print(
+                "[RAG] last_synced_at updated to "
+                f"{runtime.rag_last_synced_at.isoformat()}"
+            )
+            deleted = reconcile_chroma_with_db(rag_collection, runtime.engine)
+            if deleted:
+                print(f"[RAG] Startup reconciliation removed {deleted} orphan documents.")
+            print(f"[RAG] Auto-indexed {indexed} candidates.")
+        except Exception as exc:
+            print(f"[RAG] Auto-index failed: {exc}")
+
+    if rag_settings.enabled and rag_collection:
+        runtime.rag_sync_task = asyncio.create_task(rag_sync_loop(runtime))
+        print("[RAG] Background sync task started.")
     
     return runtime
 
@@ -525,6 +723,9 @@ def shutdown() -> None:
     if RUNTIME and RUNTIME.schema_monitor:
         RUNTIME.schema_monitor.stop()
         print("[DEBUG] [chat-api] Schema monitor stopped.")
+    if RUNTIME and RUNTIME.rag_sync_task:
+        RUNTIME.rag_sync_task.cancel()
+        print("[RAG] Background sync task stopped.")
     print("[DEBUG] [chat-api] Server shutdown complete.")
 
 
@@ -548,6 +749,84 @@ def refresh_schema_endpoint() -> RefreshSchemaOut:
         table_count=table_count,
         auto_refresh_enabled=RUNTIME.schema_monitor is not None and RUNTIME.schema_monitor._running,
     )
+
+
+@app.post("/rag/search", response_model=RagSearchOut)
+def rag_search_endpoint(payload: RagSearchIn) -> RagSearchOut:
+    if not RUNTIME or not RUNTIME.rag_settings or not RUNTIME.rag_collection:
+        raise HTTPException(status_code=503, detail="RAG not initialized")
+    if not RUNTIME.rag_settings.enabled:
+        raise HTTPException(status_code=400, detail="RAG is disabled")
+
+    top_k = payload.top_k or RUNTIME.rag_settings.top_k
+    print(f"[RAG] /rag/search query received. top_k={top_k}")
+    matches = rag_search(RUNTIME.rag_collection, payload.query, top_k)
+    matches = filter_matches(matches, RUNTIME.rag_settings.score_threshold)
+    matches = filter_matches_by_db(RUNTIME.engine, matches)
+
+    return RagSearchOut(
+        query=payload.query,
+        count=len(matches),
+        results=matches,
+    )
+
+
+@app.post("/rag/reindex", response_model=RagIndexOut)
+def rag_reindex_endpoint(payload: RagIndexIn) -> RagIndexOut:
+    if not RUNTIME or not RUNTIME.rag_settings or not RUNTIME.rag_collection:
+        raise HTTPException(status_code=503, detail="RAG not initialized")
+    if not RUNTIME.rag_settings.enabled:
+        raise HTTPException(status_code=400, detail="RAG is disabled")
+
+    limit = payload.limit or RUNTIME.rag_settings.index_limit
+    print(f"[RAG] /rag/reindex requested. limit={limit} rebuild={payload.rebuild}")
+    if payload.rebuild:
+        clear_collection(RUNTIME.rag_collection)
+    indexed, max_updated_at = index_candidates_from_db(
+        RUNTIME.rag_collection,
+        RUNTIME.engine,
+        limit,
+    )
+    if max_updated_at:
+        RUNTIME.rag_last_synced_at = max_updated_at
+        print(f"[RAG] last_synced_at updated to {max_updated_at.isoformat()}")
+    return RagIndexOut(indexed=indexed, limit=limit, rebuilt=payload.rebuild)
+
+
+@app.post("/rag/upsert", response_model=RagUpsertOut)
+def rag_upsert_endpoint(payload: RagUpsertIn) -> RagUpsertOut:
+    if not RUNTIME or not RUNTIME.rag_settings or not RUNTIME.rag_collection:
+        raise HTTPException(status_code=503, detail="RAG not initialized")
+    if not RUNTIME.rag_settings.enabled:
+        raise HTTPException(status_code=400, detail="RAG is disabled")
+
+    print(f"[RAG] /rag/upsert requested. candidate_id={payload.candidate_id}")
+    indexed, max_updated_at = upsert_candidate_by_id(
+        RUNTIME.rag_collection,
+        RUNTIME.engine,
+        payload.candidate_id,
+    )
+    if indexed == 0:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+    if max_updated_at:
+        RUNTIME.rag_last_synced_at = max_updated_at
+        print(f"[RAG] last_synced_at updated to {max_updated_at.isoformat()}")
+    return RagUpsertOut(
+        upserted=indexed,
+        last_synced_at=RUNTIME.rag_last_synced_at.isoformat() if RUNTIME.rag_last_synced_at else None,
+    )
+
+
+@app.post("/rag/delete", response_model=RagDeleteOut)
+def rag_delete_endpoint(payload: RagDeleteIn) -> RagDeleteOut:
+    if not RUNTIME or not RUNTIME.rag_settings or not RUNTIME.rag_collection:
+        raise HTTPException(status_code=503, detail="RAG not initialized")
+    if not RUNTIME.rag_settings.enabled:
+        raise HTTPException(status_code=400, detail="RAG is disabled")
+
+    print(f"[RAG] /rag/delete requested. candidate_id={payload.candidate_id}")
+    deleted = delete_candidate_by_id(RUNTIME.rag_collection, payload.candidate_id)
+    return RagDeleteOut(deleted=deleted)
 
 
 @app.get("/chat/cache-stats", response_model=CacheStatsOut)
@@ -587,6 +866,21 @@ async def stream_chat_response(payload: ChatMessageIn):
 
     session_id = ensure_session(RUNTIME.engine, payload.session_id)
     save_message(RUNTIME.engine, session_id, "user", payload.message)
+
+    route, rag_matches = _decide_route(RUNTIME, payload.message)
+    if route == "rag":
+        if RUNTIME.settings.enable_thinking_preview:
+            yield f"data: {json.dumps({'type': 'thinking', 'data': 'Routing to RAG pipeline', 'session_id': session_id})}\n\n"
+        assistant_message = rag_answer(
+            RUNTIME.model,
+            payload.message,
+            rag_matches,
+            RUNTIME.rag_settings.max_context_chars if RUNTIME.rag_settings else 2000,
+        )
+        save_message(RUNTIME.engine, session_id, "assistant", assistant_message)
+        yield f"data: {json.dumps({'type': 'content', 'data': assistant_message, 'session_id': session_id})}\n\n"
+        yield f"data: {json.dumps({'type': 'done', 'data': None, 'session_id': session_id})}\n\n"
+        return
     
     # Send initial ping to establish connection
     yield f"data: {json.dumps({'type': 'ping', 'data': 'connected', 'session_id': session_id})}\n\n"
@@ -700,12 +994,31 @@ def send_message(payload: ChatMessageIn) -> ChatMessageOut:
     print(f"[DEBUG] Incoming user message for session: {session_id}")
     save_message(RUNTIME.engine, session_id, "user", payload.message)
 
+    route, rag_matches = _decide_route(RUNTIME, payload.message)
+    print(f"[DEBUG] Route decision: {route}")
+
     thinking_preview = None
-    if RUNTIME.settings.enable_thinking_preview:
+    if RUNTIME.settings.enable_thinking_preview and route == "sql":
         print("[DEBUG] Generating thinking preview...")
         reflection_prompt = build_reflection_prompt(payload.message)
         reflection = RUNTIME.model.invoke([{"role": "user", "content": reflection_prompt}])
         thinking_preview = getattr(reflection, "content", "")
+    elif RUNTIME.settings.enable_thinking_preview and route in {"rag", "hybrid"}:
+        thinking_preview = f"Routing to {route.upper()} pipeline"
+
+    if route == "rag":
+        assistant_message = rag_answer(
+            RUNTIME.model,
+            payload.message,
+            rag_matches,
+            RUNTIME.rag_settings.max_context_chars if RUNTIME.rag_settings else 2000,
+        )
+        save_message(RUNTIME.engine, session_id, "assistant", assistant_message)
+        return ChatMessageOut(
+            session_id=session_id,
+            thinking_preview=thinking_preview,
+            assistant_message=assistant_message,
+        )
 
     config = {"configurable": {"thread_id": session_id}}
     pending_action = None
@@ -777,6 +1090,18 @@ def send_message(payload: ChatMessageIn) -> ChatMessageOut:
                 description=pending_action.get("description"),
             ),
         )
+
+    if assistant_message and route == "hybrid":
+        if not rag_matches:
+            rag_matches = _get_rag_matches(RUNTIME, payload.message)
+        if rag_matches:
+            assistant_message = combine_sql_and_rag(
+                RUNTIME.model,
+                payload.message,
+                assistant_message,
+                rag_matches,
+                RUNTIME.rag_settings.max_context_chars if RUNTIME.rag_settings else 2000,
+            )
 
     if assistant_message:
         save_message(RUNTIME.engine, session_id, "assistant", assistant_message)
@@ -915,7 +1240,8 @@ def health_check():
             "response_caching": cache_stats is not None,
             "auto_schema_refresh": RUNTIME.schema_monitor is not None and RUNTIME.schema_monitor._running,
             "streaming": True,
-            "connection_pooling": True
+            "connection_pooling": True,
+            "rag": bool(RUNTIME.rag_collection is not None and RUNTIME.rag_settings and RUNTIME.rag_settings.enabled)
         },
         "performance": {
             "cache": cache_stats,
@@ -925,9 +1251,57 @@ def health_check():
         "stats": {
             "active_sessions": session_count or 0,
             "total_messages": message_count or 0,
-            "table_count": len(RUNTIME.db.get_usable_table_names()) if RUNTIME.db else 0
+            "table_count": len(RUNTIME.db.get_usable_table_names()) if RUNTIME.db else 0,
+            "rag_mode": RUNTIME.rag_settings.mode if RUNTIME.rag_settings else "disabled",
+            "rag_last_synced_at": RUNTIME.rag_last_synced_at.isoformat() if RUNTIME.rag_last_synced_at else None
         }
     }
+
+
+@app.get("/debug/data-sources", response_model=DataSourcesInspectOut)
+def debug_data_sources(
+    limit: int = 50,
+    text_preview_chars: int = 400,
+    diff_sample: int = 30,
+) -> DataSourcesInspectOut:
+    """Neon (Postgres) candidates vs Chroma RAG index — for local verification."""
+    if not RUNTIME:
+        raise HTTPException(status_code=500, detail="Runtime not initialized")
+
+    lim = max(1, min(limit, 500))
+    tprev = max(80, min(text_preview_chars, 4000))
+    dsample = max(0, min(diff_sample, 200))
+
+    neon_total, neon_sample = fetch_neon_candidates_preview(RUNTIME.engine, lim)
+
+    coll = RUNTIME.rag_collection
+    settings = RUNTIME.rag_settings
+    chroma_enabled = bool(settings and settings.enabled and coll is not None)
+    cname = settings.collection if settings else None
+
+    chroma_sample: List[Dict[str, Any]] = []
+    chroma_total = 0
+    missing_neon: List[str] = []
+    missing_chroma: List[str] = []
+
+    if coll is not None:
+        chroma_total = chroma_collection_count(coll)
+        chroma_sample = fetch_chroma_documents_preview(coll, lim, tprev)
+        if dsample > 0:
+            missing_neon, missing_chroma = id_sync_diff_samples(
+                RUNTIME.engine, coll, dsample
+            )
+
+    return DataSourcesInspectOut(
+        neon_total=neon_total,
+        neon_sample=neon_sample,
+        chroma_enabled=chroma_enabled,
+        chroma_collection_name=cname,
+        chroma_total=chroma_total,
+        chroma_sample=chroma_sample,
+        neon_ids_missing_in_chroma_sample=missing_neon,
+        chroma_ids_missing_in_neon_sample=missing_chroma,
+    )
 
 
 @app.get("/")
@@ -951,6 +1325,11 @@ def root():
             "/chat/refresh-schema",
             "/chat/cache-stats",
             "/chat/clear-cache",
-            "/health"
+            "/rag/search",
+            "/rag/reindex",
+            "/rag/upsert",
+            "/rag/delete",
+            "/health",
+            "/debug/data-sources",
         ]
     }

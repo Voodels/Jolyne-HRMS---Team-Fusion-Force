@@ -1,2 +1,5 @@
 fastapi
 uvicorn
+langchain-openai
+chromadb
+sentence-transformers

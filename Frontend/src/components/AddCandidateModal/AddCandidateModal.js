@@ -1,13 +1,13 @@
 
 import { useState, useEffect } from 'react';
+import Loader from '../Loader/Loader';
 import './AddCandidateModal.css';
 
 const BASE_URL = process.env.REACT_APP_API_BASE_URL;
 
-function AddCandidateModal({ isOpen, onClose, onAdd, editData }) {
-
-  const [form, setForm] = useState({
+const getInitialFormState = () => ({
   // ===== BASIC =====
+  name: '',
   fullName: '',
   firstName: '',
   middleName: '',
@@ -47,6 +47,7 @@ function AddCandidateModal({ isOpen, onClose, onAdd, editData }) {
   primarySkill: '',
   domain: '',
   department: '',
+  jobTitle: '',
 
   // ===== ARRAYS (IMPORTANT) =====
   educationDetails: [],
@@ -66,9 +67,16 @@ function AddCandidateModal({ isOpen, onClose, onAdd, editData }) {
   // ===== PIPELINE =====
   currentStage: 'APPLIED',
 
+  // ===== UI FIELDS =====
+  skills: '',
+
   // ===== FILE =====
   resume: null
-  });
+});
+
+function AddCandidateModal({ isOpen, onClose, onAdd, editData }) {
+
+  const [form, setForm] = useState(getInitialFormState());
 
   const [resumeUrl, setResumeUrl] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -450,7 +458,7 @@ const handleSubmit = async (e) => {
     onClose();
 
     // ✅ Reset (important for structured forms)
-    setForm({});
+    setForm(getInitialFormState());
     setResumeUrl("");
 
   } catch (err) {
@@ -512,8 +520,11 @@ const handleSubmit = async (e) => {
           />
 
           {/* STATUS */}
-          {uploading && <p style={{ color: 'blue' }}>Uploading resume...</p>}
-          {parsing && <p style={{ color: 'green' }}>Parsing resume...</p>}
+          {uploading && <Loader label="Uploading resume..." size="sm" inline />}
+          {parsing && <Loader label="Parsing resume..." size="sm" inline />}
+          {loading && !uploading && !parsing && (
+            <Loader label="Saving candidate..." size="sm" inline />
+          )}
 
           {/* PREVIEW LINK */}
           {resumeUrl && (

@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -39,12 +41,17 @@ import lombok.RequiredArgsConstructor;
 @Transactional
 public class CandidateServiceImpl implements CandidateService {
 
+    private static final Logger logger = LoggerFactory.getLogger(CandidateServiceImpl.class);
+
     private final CandidateRepository candidateRepository;
     private final Cloudinary cloudinary;
     private final ObjectMapper objectMapper;
 
     @Value("${AFFINDA_API_KEY:}")
     private String affindaApiKey;
+
+    @Value("${SQL_AGENT_BASE_URL:http://localhost:8000}")
+    private String sqlAgentBaseUrl;
 
     private final RestTemplate restTemplate = new RestTemplate();
     private static final String AFFINDA_API_URL = "https://api.affinda.com/v2/resumes";
@@ -106,7 +113,9 @@ public class CandidateServiceImpl implements CandidateService {
     @Override
     public CandidateResponseDto createCandidate(CandidateRequestDto dto) {
         Candidate candidate = mapToEntity(dto);
-        return convertToResponseDto(candidateRepository.save(candidate));
+        CandidateResponseDto response = convertToResponseDto(candidateRepository.save(candidate));
+        notifyRagUpsert(response.getId());
+        return response;
     }
 
     // =========================
@@ -131,7 +140,9 @@ public class CandidateServiceImpl implements CandidateService {
     public CandidateResponseDto updateCandidate(Long id, CandidateRequestDto dto) {
         Candidate candidate = getCandidate(id);
         mapToExistingEntity(dto, candidate);
-        return convertToResponseDto(candidateRepository.save(candidate));
+        CandidateResponseDto response = convertToResponseDto(candidateRepository.save(candidate));
+        notifyRagUpsert(response.getId());
+        return response;
     }
 
     // =========================
@@ -169,6 +180,7 @@ public class CandidateServiceImpl implements CandidateService {
             throw new EntityNotFoundException("Candidate not found");
         }
         candidateRepository.deleteById(id);
+        notifyRagDelete(id);
     }
 
     // =========================
@@ -178,7 +190,9 @@ public class CandidateServiceImpl implements CandidateService {
     public CandidateResponseDto updatePipelineStage(Long id, String stage) {
         Candidate candidate = getCandidate(id);
         candidate.updateStage(PipelineStage.valueOf(stage.toUpperCase()));
-        return convertToResponseDto(candidateRepository.save(candidate));
+        CandidateResponseDto response = convertToResponseDto(candidateRepository.save(candidate));
+        notifyRagUpsert(response.getId());
+        return response;
     }
 
     // =========================
@@ -233,6 +247,44 @@ public class CandidateServiceImpl implements CandidateService {
     private Candidate getCandidate(Long id) {
         return candidateRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Candidate not found with id: " + id));
+    }
+
+    private void notifyRagDelete(Long candidateId) {
+        if (sqlAgentBaseUrl == null || sqlAgentBaseUrl.isBlank()) {
+            logger.warn("SQL_AGENT_BASE_URL not configured; skipping RAG delete sync for id={}", candidateId);
+            return;
+        }
+
+        String url = sqlAgentBaseUrl + "/rag/delete";
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            Map<String, String> payload = Map.of("candidate_id", String.valueOf(candidateId));
+            HttpEntity<Map<String, String>> requestEntity = new HttpEntity<>(payload, headers);
+            ResponseEntity<String> response = restTemplate.postForEntity(url, requestEntity, String.class);
+            logger.info("RAG delete sync status={} candidateId={}", response.getStatusCode(), candidateId);
+        } catch (Exception e) {
+            logger.warn("RAG delete sync failed for candidateId={}: {}", candidateId, e.getMessage());
+        }
+    }
+
+    private void notifyRagUpsert(Long candidateId) {
+        if (sqlAgentBaseUrl == null || sqlAgentBaseUrl.isBlank()) {
+            logger.warn("SQL_AGENT_BASE_URL not configured; skipping RAG upsert sync for id={}", candidateId);
+            return;
+        }
+
+        String url = sqlAgentBaseUrl + "/rag/upsert";
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            Map<String, String> payload = Map.of("candidate_id", String.valueOf(candidateId));
+            HttpEntity<Map<String, String>> requestEntity = new HttpEntity<>(payload, headers);
+            ResponseEntity<String> response = restTemplate.postForEntity(url, requestEntity, String.class);
+            logger.info("RAG upsert sync status={} candidateId={}", response.getStatusCode(), candidateId);
+        } catch (Exception e) {
+            logger.warn("RAG upsert sync failed for candidateId={}: {}", candidateId, e.getMessage());
+        }
     }
 
     private Candidate mapToEntity(CandidateRequestDto dto) {

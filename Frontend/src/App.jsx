@@ -10,13 +10,15 @@ import Pipeline from './components/Pipeline/Pipeline';
 import Jobs from './components/Jobs/Jobs';
 import Reports from './components/Reports/Reports';
 import Settings from './components/Settings/Settings';
+import NeonChromaInspect from './components/NeonChromaInspect/NeonChromaInspect';
 import './App.css';
 
 function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/" element={<LandingPage />} />
+        <Route path="/" element={<NeonChromaInspect />} />
+        <Route path="/home" element={<LandingPage />} />
         <Route path="/login/:role" element={<LoginPage />} />
         <Route path="/otp" element={<OTPPage />} />
         <Route path="/dashboard" element={<Dashboard />} />
@@ -25,8 +27,8 @@ function App() {
         <Route path="/candidates/:id" element={<CandidateProfile />} />
         <Route path="/ai-assistant" element={<AIAssistant />} />
         <Route path="/jobs" element={<Jobs />} />
-<Route path="/reports" element={<Reports />} />
-<Route path="/settings" element={<Settings />} />
+        <Route path="/reports" element={<Reports />} />
+        <Route path="/settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </Router>

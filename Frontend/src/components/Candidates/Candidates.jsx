@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Sidebar from '../Sidebar/Sidebar';
 import TopBar from '../TopBar/TopBar';
 import AddCandidateModal from '../AddCandidateModal/AddCandidateModal';
+import Loader from '../Loader/Loader';
 import './Candidates.css';
 
 // ✅ ENV BASE URL
@@ -15,6 +16,7 @@ function Candidates() {
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [candidates, setCandidates] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const [search, setSearch] = useState('');
   const [jobFilter, setJobFilter] = useState('All Jobs');
@@ -71,12 +73,14 @@ function Candidates() {
   // ---------------- FETCH ALL ----------------
  const fetchCandidates = async () => {
   try {
+    setLoading(true);
     const res = await fetch(`${BASE_URL}/candidates`);
 
-    const text = await res.text();
-    console.log("RAW RESPONSE:", text);
+    if (!res.ok) {
+      throw new Error('Failed to fetch candidates');
+    }
 
-    const data = JSON.parse(text);
+    const data = await res.json();
 
     // ✅ Handle ALL cases
     const list = Array.isArray(data)
@@ -97,9 +101,10 @@ function Candidates() {
     }));
 
     setCandidates(formatted);
-
   } catch (err) {
     console.error("FETCH ERROR:", err);
+  } finally {
+    setLoading(false);
   }
 };
 
@@ -117,7 +122,12 @@ function Candidates() {
   }
 
   try {
+    setLoading(true);
     const res = await fetch(`${BASE_URL}/candidates/search?name=${value}`);
+
+    if (!res.ok) {
+      throw new Error('Failed to search candidates');
+    }
 
     const data = await res.json();
 
@@ -139,9 +149,10 @@ function Candidates() {
     }));
 
     setCandidates(formatted);
-
   } catch (err) {
     console.error(err);
+  } finally {
+    setLoading(false);
   }
 };
 
@@ -195,7 +206,7 @@ const clearNotifications = () => {
     (
       c.name.toLowerCase().includes(search.toLowerCase()) ||
       c.email.toLowerCase().includes(search.toLowerCase()) ||
-      c.skills.toLowerCase().includes(search.toLowerCase())
+      (c.skills || '').toLowerCase().includes(search.toLowerCase())
     )
   );
 
@@ -262,86 +273,92 @@ const clearNotifications = () => {
             </div>
           </div>
 
-          <div className="candidates-table-wrap">
-            <table className="candidates-table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Job Title</th>
-                  <th>Stage</th>
-                  <th>Skills</th>
-                  <th>Last Activity</th>
-                  <th></th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {filtered.map((c) => (
-                  <tr key={c.id} className="candidate-row">
-                    <td onClick={() => handleView(c.id)}>
-                      <div className="candidate-name-cell">
-                        <div className="candidate-avatar">{c.initials}</div>
-                        <div>
-                          <p className="candidate-name">{c.name}</p>
-                          <p className="candidate-email">{c.email}</p>
-                        </div>
-                      </div>
-                    </td>
-
-                    <td>{c.jobTitle}</td>
-
-                    <td>
-                      <span
-                        className="stage-badge"
-                        style={{
-                          background: c.stageColor,
-                          color: c.stageTextColor,
-                        }}
-                      >
-                        {c.stage}
-                      </span>
-                    </td>
-
-                    <td>{c.skills}</td>
-                    <td>{c.lastActivity}</td>
-
-                    <td style={{ position: 'relative' }}>
-                      <button
-                        className="more-btn"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setActiveMenuId(prev => prev === c.id ? null : c.id);
-                        }}
-                      >
-                        ⋮
-                      </button>
-
-                      {activeMenuId === c.id && (
-                        <div className="dropdown-menu" onClick={(e) => e.stopPropagation()}>
-                          <div className="dropdown-header">
-                            <span>Actions</span>
-                            <button
-                              className="dropdown-close"
-                              onClick={() => setActiveMenuId(null)}
-                            >
-                              ✖
-                            </button>
-                          </div>
-
-                          <div className="dropdown-item" onClick={() => handleView(c.id)}>👁 View</div>
-                          <div className="dropdown-item" onClick={() => handleEdit(c)}>✏ Edit</div>
-                          <div className="dropdown-item delete" onClick={() => handleDelete(c.id)}>🗑 Delete</div>
-                        </div>
-                      )}
-                    </td>
-
+          {loading ? (
+            <div className="candidates-loader">
+              <Loader label="Loading candidates..." />
+            </div>
+          ) : (
+            <div className="candidates-table-wrap">
+              <table className="candidates-table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Job Title</th>
+                    <th>Stage</th>
+                    <th>Skills</th>
+                    <th>Last Activity</th>
+                    <th></th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
 
-          {filtered.length === 0 && (
+                <tbody>
+                  {filtered.map((c) => (
+                    <tr key={c.id} className="candidate-row">
+                      <td onClick={() => handleView(c.id)}>
+                        <div className="candidate-name-cell">
+                          <div className="candidate-avatar">{c.initials}</div>
+                          <div>
+                            <p className="candidate-name">{c.name}</p>
+                            <p className="candidate-email">{c.email}</p>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td>{c.jobTitle}</td>
+
+                      <td>
+                        <span
+                          className="stage-badge"
+                          style={{
+                            background: c.stageColor,
+                            color: c.stageTextColor,
+                          }}
+                        >
+                          {c.stage}
+                        </span>
+                      </td>
+
+                      <td>{c.skills}</td>
+                      <td>{c.lastActivity}</td>
+
+                      <td style={{ position: 'relative' }}>
+                        <button
+                          className="more-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveMenuId(prev => prev === c.id ? null : c.id);
+                          }}
+                        >
+                          ⋮
+                        </button>
+
+                        {activeMenuId === c.id && (
+                          <div className="dropdown-menu" onClick={(e) => e.stopPropagation()}>
+                            <div className="dropdown-header">
+                              <span>Actions</span>
+                              <button
+                                className="dropdown-close"
+                                onClick={() => setActiveMenuId(null)}
+                              >
+                                ✖
+                              </button>
+                            </div>
+
+                            <div className="dropdown-item" onClick={() => handleView(c.id)}>👁 View</div>
+                            <div className="dropdown-item" onClick={() => handleEdit(c)}>✏ Edit</div>
+                            <div className="dropdown-item delete" onClick={() => handleDelete(c.id)}>🗑 Delete</div>
+                          </div>
+                        )}
+                      </td>
+
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {!loading && filtered.length === 0 && (
             <p className="no-data">No candidates found</p>
           )}
         </main>
