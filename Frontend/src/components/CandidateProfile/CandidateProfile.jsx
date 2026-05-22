@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom'; // ✅ ADDED useLocation
 import Sidebar from '../Sidebar/Sidebar';
 import TopBar from '../TopBar/TopBar';
+import Loader from '../Loader/Loader';
 import './CandidateProfile.css';
 
 // ✅ ENV
@@ -128,7 +129,11 @@ const resumeUrl = candidate?.resumeUrl;
 
   // ---------------- LOADING ----------------
   if (loading) {
-    return <div className="profile-main">Loading...</div>;
+    return (
+      <div className="profile-main">
+        <Loader label="Loading candidate..." />
+      </div>
+    );
   }
 
   if (!candidate) {

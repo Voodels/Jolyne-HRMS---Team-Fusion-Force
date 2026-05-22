@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../Sidebar/Sidebar';
 import TopBar from '../TopBar/TopBar';
+import Loader from '../Loader/Loader';
 import { useState, useEffect } from 'react';
 import { getJobTitles } from '../../api/jobApi';
 import './Pipeline.css';
@@ -18,6 +19,7 @@ function Pipeline() {
   const [jobOptions, setJobOptions] = useState(['All Jobs']);
 
   const [candidates, setCandidates] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const toggleSidebar = () => {
     setIsSidebarOpen(prev => !prev);
@@ -26,7 +28,11 @@ function Pipeline() {
   // ---------------- FETCH FROM API ----------------
   const fetchCandidates = async () => {
     try {
+      setLoading(true);
       const res = await fetch(`${BASE_URL}/candidates`);
+      if (!res.ok) {
+        throw new Error('Failed to fetch candidates');
+      }
       const data = await res.json();
 
       const list = Array.isArray(data) ? data : data.content || [];
@@ -45,6 +51,8 @@ function Pipeline() {
 
     } catch (err) {
       console.error(err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -87,7 +95,7 @@ function Pipeline() {
       (stageFilter === 'All Stages' || c.stage === stageFilter) &&
       (
         c.name.toLowerCase().includes(search.toLowerCase()) ||
-        c.skills.toLowerCase().includes(search.toLowerCase())
+        (c.skills || '').toLowerCase().includes(search.toLowerCase())
       )
     );
   });
@@ -167,11 +175,17 @@ function Pipeline() {
             </div>
           </div>
 
-          <div className="pipeline-container">
-            {renderColumn('Applied', grouped.Applied)}
-            {renderColumn('Shortlisted', grouped.Shortlisted)}
-            {renderColumn('Selected', grouped.Selected)}
-          </div>
+          {loading ? (
+            <div className="pipeline-loader">
+              <Loader label="Loading pipeline..." />
+            </div>
+          ) : (
+            <div className="pipeline-container">
+              {renderColumn('Applied', grouped.Applied)}
+              {renderColumn('Shortlisted', grouped.Shortlisted)}
+              {renderColumn('Selected', grouped.Selected)}
+            </div>
+          )}
         </main>
       </div>
     </div>

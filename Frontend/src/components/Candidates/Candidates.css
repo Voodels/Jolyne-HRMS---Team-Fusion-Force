@@ -85,6 +85,13 @@
   overflow: hidden;
 }
 
+.candidates-loader {
+  background: var(--color-white);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 24px;
+}
+
 .candidates-table {
   width: 100%;
   border-collapse: collapse;

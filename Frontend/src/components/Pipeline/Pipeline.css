@@ -16,6 +16,13 @@
   overflow-x: auto;
 }
 
+.pipeline-loader {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
 /* Column */
 .pipeline-column {
   flex: 1;

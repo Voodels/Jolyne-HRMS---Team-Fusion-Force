@@ -1,26 +1,54 @@
 
 import { useState, useEffect } from 'react';
+import Loader from '../Loader/Loader';
 import './AddCandidateModal.css';
 import { getJobTitles } from '../../api/jobApi';
 
 const BASE_URL = process.env.REACT_APP_API_BASE_URL;
 
+<<<<<<< HEAD
 const INITIAL_FORM = {
   name: '',
+=======
+const getInitialFormState = () => ({
+  // ===== BASIC =====
+  name: '',
+  fullName: '',
+>>>>>>> 5d6e6ebe81eeff2faafe3f5c617ce676ff91a4cd
   firstName: '',
   middleName: '',
   lastName: '',
   email: '',
   department: '',
+<<<<<<< HEAD
   resume: null,
   // keep other fields if needed but initialize minimally
   resumeUrl: '',
   currentStage: 'APPLIED'
 };
+=======
+  jobTitle: '',
+>>>>>>> 5d6e6ebe81eeff2faafe3f5c617ce676ff91a4cd
 
 function AddCandidateModal({ isOpen, onClose, onAdd, editData }) {
 
+<<<<<<< HEAD
   const [form, setForm] = useState(INITIAL_FORM);
+=======
+  // ===== PIPELINE =====
+  currentStage: 'APPLIED',
+
+  // ===== UI FIELDS =====
+  skills: '',
+
+  // ===== FILE =====
+  resume: null
+});
+
+function AddCandidateModal({ isOpen, onClose, onAdd, editData }) {
+
+  const [form, setForm] = useState(getInitialFormState());
+>>>>>>> 5d6e6ebe81eeff2faafe3f5c617ce676ff91a4cd
 
   const [resumeUrl, setResumeUrl] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -348,8 +376,13 @@ const handleSubmit = async (e) => {
     onAdd();
     onClose();
 
+<<<<<<< HEAD
     // ✅ Reset to initial minimal form
     setForm(INITIAL_FORM);
+=======
+    // ✅ Reset (important for structured forms)
+    setForm(getInitialFormState());
+>>>>>>> 5d6e6ebe81eeff2faafe3f5c617ce676ff91a4cd
     setResumeUrl("");
 
   } catch (err) {
@@ -426,8 +459,11 @@ const handleSubmit = async (e) => {
           />
 
           {/* STATUS */}
-          {uploading && <p style={{ color: 'blue' }}>Uploading resume...</p>}
-          {parsing && <p style={{ color: 'green' }}>Parsing resume...</p>}
+          {uploading && <Loader label="Uploading resume..." size="sm" inline />}
+          {parsing && <Loader label="Parsing resume..." size="sm" inline />}
+          {loading && !uploading && !parsing && (
+            <Loader label="Saving candidate..." size="sm" inline />
+          )}
 
           {/* PREVIEW LINK */}
           {resumeUrl && (
