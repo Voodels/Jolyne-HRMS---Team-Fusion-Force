@@ -82,6 +82,12 @@ input {
   color: #fff;
 }
 
+.otp-error {
+  color: #b91c1c;
+  margin-bottom: 12px;
+  font-size: 0.95rem;
+}
+
 /* NOTE TEXT */
 .otp-note {
   margin-top: 15px;

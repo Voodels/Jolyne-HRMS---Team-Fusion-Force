@@ -96,14 +96,21 @@ input {
   color: #fff;
 }
 
+.login-error {
+  color: #b91c1c;
+  margin-bottom: 12px;
+  font-size: 0.95rem;
+}
+
 /* FORGOT PASSWORD */
 .forgot-password {
   display: flex;
   justify-content: center;
   margin-top: 10px;
   text-decoration: none;
-  font-weight: 600;
-  color: #52d0e6;
+  font-weight: 100;
+  font-size: 12px;
+  color: #526be6;
 }
 
 /* MOBILE */

@@ -93,6 +93,7 @@ public class Candidate {
     private String highestEducation;
     private String primarySkill;
     private String domain;
+    private String activeJob;
 
     private String department;
 

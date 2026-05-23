@@ -1,12 +1,22 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import './AddJobModal.css'; // reuse same CSS
 
-function AddJobModal({ isOpen, onClose, onAdd }) {
+function AddJobModal({ isOpen, onClose, onAdd, currentUser }) {
   const [form, setForm] = useState({
     title: '',
     manager: '',
     file: null,
   });
+
+  // Auto-fill manager when modal opens and currentUser is available
+  useEffect(() => {
+    if (isOpen && currentUser?.name) {
+      setForm(prev => ({
+        ...prev,
+        manager: currentUser.name,
+      }));
+    }
+  }, [isOpen, currentUser]);
 
   if (!isOpen) return null;
 
@@ -32,6 +42,7 @@ function AddJobModal({ isOpen, onClose, onAdd }) {
     };
 
     onAdd(newJob);
+    setForm({ title: '', manager: '', file: null });
     onClose();
   };
 
@@ -46,6 +57,7 @@ function AddJobModal({ isOpen, onClose, onAdd }) {
             type="text"
             name="title"
             placeholder="Job Title"
+            value={form.title}
             required
             onChange={handleChange}
           />
@@ -54,6 +66,7 @@ function AddJobModal({ isOpen, onClose, onAdd }) {
             type="text"
             name="manager"
             placeholder="Hiring Manager"
+            value={form.manager}
             required
             onChange={handleChange}
           />

@@ -7,6 +7,7 @@ function LandingPage() {
 
   return (
     <div className="landing-wrapper">
+
       <header className="landing-header">
         <div className="landing-logo">
           <img src={logo} alt="Hein+Fricke Logo" className="logo-img" />
@@ -39,7 +40,14 @@ function LandingPage() {
         <div className="welcome-banner">
           <p>Welcome To AI-powered Recruitment Platform</p>
         </div>
+
+     
       </main>
+
+      <footer className="landing-footer" onClick={() => navigate('/login/user')} role="button">
+        <p>AI_HACKATHON_2026</p>
+      </footer>
+
     </div>
   );
 }

@@ -1,21 +1,3 @@
-<<<<<<< HEAD
-import { useState, useEffect } from "react";
-import logo from '../../assets/images/Logo2.png';
-import Sidebar from '../Sidebar/Sidebar';
-import TopBar from '../TopBar/TopBar';
-import { getDashboardData } from '../../api/dashboardApi';
-import './Dashboard.css';
-
-const defaultPipelineStages = [
-  { label: 'Applied', count: 0, color: '#7c3aed', width: '100%' },
-  { label: 'Screening', count: 0, color: '#3b82f6', width: '70%' },
-  { label: 'Technical Review', count: 0, color: '#22c55e', width: '50%' },
-  { label: 'HR Interview', count: 0, color: '#f59e0b', width: '32%' },
-  { label: 'Selected', count: 0, color: '#10b981', width: '22%' },
-];
-
-const defaultChartData = [];
-=======
 import { useEffect, useMemo, useState } from "react";
 import logo from '../../assets/images/Logo2.png';
 import Sidebar from '../Sidebar/Sidebar';
@@ -32,7 +14,6 @@ const STAGE_CONFIG = [
   { key: 'HR_INTERVIEW', label: 'HR Interview', color: '#f59e0b' },
   { key: 'SELECTED', label: 'Selected', color: '#10b981' },
 ];
->>>>>>> 5d6e6ebe81eeff2faafe3f5c617ce676ff91a4cd
 
 function SparkLine({ data }) {
   const max = Math.max(...data.map((d) => d.value));
@@ -110,99 +91,17 @@ function buildChartData(items, days, referenceDate) {
 
 function Dashboard() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-<<<<<<< HEAD
-  const [summary, setSummary] = useState(null);
-  const [pipelineStages, setPipelineStages] = useState(defaultPipelineStages);
-  const [chartData, setChartData] = useState(defaultChartData);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
-=======
   const [candidates, setCandidates] = useState([]);
   const [totalCandidates, setTotalCandidates] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [chartRange, setChartRange] = useState(30);
->>>>>>> 5d6e6ebe81eeff2faafe3f5c617ce676ff91a4cd
 
   const toggleSidebar = () => {
     setIsSidebarOpen(prev => !prev);
   };
 
   useEffect(() => {
-<<<<<<< HEAD
-    const fetchDashboard = async () => {
-      try {
-        const data = await getDashboardData(30);
-        setSummary(data.summary);
-        setPipelineStages(data.pipelineStages || defaultPipelineStages);
-        setChartData(data.chartData || []);
-      } catch (err) {
-        console.error('Failed to load dashboard data', err);
-        setError('Unable to load dashboard information.');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchDashboard();
-  }, []);
-
-  const stats = [
-    {
-      label: 'Total Candidates',
-      value: summary ? summary.totalCandidates : '0',
-      icon: '👥',
-      sub: '↑ 12% vs last week',
-      subColor: '#22c55e',
-      bg: '#ede9ff',
-      iconColor: '#7c3aed',
-    },
-    {
-      label: 'Active Jobs',
-      value: summary ? summary.activeJobs : '0',
-      icon: '💼',
-      sub: '6 Closing soon',
-      subColor: '#6b7280',
-      bg: '#e0f2fe',
-      iconColor: '#0ea5e9',
-    },
-    {
-      label: 'Selected',
-      value: summary ? summary.selectedCandidates : '0',
-      icon: '✅',
-      sub: 'This Month',
-      subColor: '#6b7280',
-      bg: '#dcfce7',
-      iconColor: '#16a34a',
-    },
-    {
-      label: 'In Progress',
-      value: summary ? summary.inProgressCandidates : '0',
-      icon: '⏳',
-      sub: 'Across all progress',
-      subColor: '#6b7280',
-      bg: '#fef3c7',
-      iconColor: '#d97706',
-    },
-  ];
-
-  const chartSeries = chartData.length > 0 ? chartData : [];
-
-  const stageColors = {
-    Applied: '#7c3aed',
-    Screening: '#3b82f6',
-    'Technical Review': '#22c55e',
-    'HR Interview': '#f59e0b',
-    Selected: '#10b981',
-  };
-
-  const maxPipelineCount = Math.max(...pipelineStages.map((stage) => stage.count), 1);
-  const pipelineStagesDisplay = pipelineStages.map((stage) => ({
-    ...stage,
-    color: stageColors[stage.label] || '#6b7280',
-    width: `${Math.max(14, Math.round((stage.count / maxPipelineCount) * 100))}%`,
-  }));
-=======
     const fetchDashboardData = async () => {
       try {
         setLoading(true);
@@ -327,7 +226,6 @@ function Dashboard() {
       chartData: chart,
     };
   }, [candidates, totalCandidates, chartRange]);
->>>>>>> 5d6e6ebe81eeff2faafe3f5c617ce676ff91a4cd
 
   return (
     <div className="app-layout">
@@ -345,27 +243,8 @@ function Dashboard() {
             </div>
           </div>
 
-<<<<<<< HEAD
           {error && <div className="dashboard-error">{error}</div>}
-          {isLoading ? (
-            <div className="dashboard-loading">Loading dashboard data...</div>
-          ) : (
-            <>
-              <div className="stats-grid">
-                {stats.map((s) => (
-                  <div className="stat-card" key={s.label} style={{ background: s.bg }}>
-                    <div className="stat-icon" style={{ color: s.iconColor }}>{s.icon}</div>
-                    <div className="stat-info">
-                      <p className="stat-label">{s.label}</p>
-                      <p className="stat-value">{s.value}</p>
-                      <p className="stat-sub" style={{ color: s.subColor }}>{s.sub}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-=======
+
           <div className="stats-grid">
             {loading ? (
               <div className="dashboard-loader">
@@ -384,30 +263,11 @@ function Dashboard() {
               ))
             )}
           </div>
->>>>>>> 5d6e6ebe81eeff2faafe3f5c617ce676ff91a4cd
-
-          {error && (
-            <div className="dashboard-error">
-              {error}
-            </div>
-          )}
 
           <div className="dashboard-bottom">
             <div className="pipeline-card">
               <h3 className="card-title">Pipeline Overview</h3>
               <div className="funnel-container">
-<<<<<<< HEAD
-                {pipelineStagesDisplay.map((stage) => (
-                  <div className="funnel-row" key={stage.label}>
-                    <div className="funnel-bar-wrap">
-                      <div
-                        className="funnel-bar"
-                        style={{
-                          width: stage.width,
-                          background: stage.color,
-                        }}
-                      />
-=======
                 {loading ? (
                   <Loader label="Loading pipeline..." />
                 ) : (
@@ -426,7 +286,6 @@ function Dashboard() {
                         <span>{stage.label}</span>
                         <span className="funnel-count">{stage.count}</span>
                       </div>
->>>>>>> 5d6e6ebe81eeff2faafe3f5c617ce676ff91a4cd
                     </div>
                   ))
                 )}
@@ -447,14 +306,6 @@ function Dashboard() {
                 </select>
               </div>
               <div className="chart-wrap">
-<<<<<<< HEAD
-                <SparkLine data={chartSeries} />
-                <div className="chart-x-labels">
-                  {chartSeries.map((d) => (
-                    <span key={d.date}>{d.date}</span>
-                  ))}
-                </div>
-=======
                 {loading ? (
                   <Loader label="Loading trend..." />
                 ) : (
@@ -467,7 +318,6 @@ function Dashboard() {
                     </div>
                   </>
                 )}
->>>>>>> 5d6e6ebe81eeff2faafe3f5c617ce676ff91a4cd
               </div>
             </div>
           </div>

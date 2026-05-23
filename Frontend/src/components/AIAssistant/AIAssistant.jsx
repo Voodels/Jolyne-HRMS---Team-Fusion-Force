@@ -10,6 +10,8 @@ import {
   getHistory,
   refreshSchema,
 } from '../../api/chatbotApi';
+import { getAuthSession } from '../../api/authApi';
+import { DEFAULT_APP_PERMISSIONS, loadAppPermissions } from '../../api/permissionApi';
 import './AIAssistant.css';
 
 function AIAssistant() {
@@ -28,6 +30,8 @@ function AIAssistant() {
   const bottomRef = useRef(null);
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [appPermissions, setAppPermissions] = useState(DEFAULT_APP_PERMISSIONS);
 
   const suggestedQuestions = [
     "How many candidates?",
@@ -74,6 +78,11 @@ function AIAssistant() {
       localStorage.setItem('chatSessionId', sessionId);
     }
   }, [sessionId]);
+
+  useEffect(() => {
+    setCurrentUser(getAuthSession());
+    setAppPermissions(loadAppPermissions());
+  }, []);
 
   const ensureSession = async () => {
     if (sessionId) return sessionId;
@@ -296,6 +305,23 @@ function AIAssistant() {
       setSchemaRefreshing(false);
     }
   };
+
+  if (!appPermissions.allowAIService) {
+    return (
+      <div className="app-layout">
+        <Sidebar isOpen={isSidebarOpen} />
+        <div className={`app-content ${isSidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}>
+          <TopBar toggleSidebar={toggleSidebar} />
+          <main className="ai-main">
+            <div className="ai-disabled-panel">
+              <h3>AI Assistant Disabled</h3>
+              <p>The AI service is currently turned off by the director.</p>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="app-layout">

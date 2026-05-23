@@ -3,6 +3,8 @@ import Sidebar from '../Sidebar/Sidebar';
 import TopBar from '../TopBar/TopBar';
 import AddJobModal from '../AddJobModal/AddJobModal'; // ✅ import modal
 import { getJobs, createJob, deleteJob } from '../../api/jobApi';
+import { getAuthSession } from '../../api/authApi';
+import { DEFAULT_APP_PERMISSIONS, loadAppPermissions } from '../../api/permissionApi';
 import './Jobs.css';
 
 function Jobs() {
@@ -10,13 +12,18 @@ function Jobs() {
   const [jobs, setJobs] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-
+  const [jobTitles, setJobTitles] = useState([]);
   const [search, setSearch] = useState('');
   const [managerFilter, setManagerFilter] = useState('All Managers');
   const [sortBy, setSortBy] = useState('Latest');
   const [managers, setManagers] = useState(['All Managers']);
+  const [jobFilter, setJobFilter] = useState('All Jobs');
 
   const [activeMenuId, setActiveMenuId] = useState(null);
+  const [menuPosition, setMenuPosition] = useState({ top: 0, right: 0 });
+  const [currentUser, setCurrentUser] = useState(null);
+  const [appPermissions, setAppPermissions] = useState(DEFAULT_APP_PERMISSIONS);
+  const canAddJob = appPermissions.allowAddJob && currentUser?.role !== 'hr';
 
   // ✅ NEW: modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -45,9 +52,11 @@ function Jobs() {
         const data = await getJobs();
         setJobs(data);
         
-        // Extract unique managers from jobs data
+        // Extract unique managers and job titles from jobs data
         const uniqueManagers = ['All Managers', ...new Set(data.map(job => job.manager))];
+        const uniqueTitles = [...new Set(data.map(job => job.title))];
         setManagers(uniqueManagers);
+        setJobTitles(uniqueTitles);
       } catch (err) {
         console.error('Failed to load jobs', err);
         setError('Unable to load jobs.');
@@ -57,6 +66,11 @@ function Jobs() {
     };
 
     fetchJobs();
+  }, []);
+
+  useEffect(() => {
+    setCurrentUser(getAuthSession());
+    setAppPermissions(loadAppPermissions());
   }, []);
 
   // ✅ Add Job FROM MODAL
@@ -107,9 +121,46 @@ function Jobs() {
     console.log('Edit:', job);
   };
 
+  const handleDownloadPDF = (fileName) => {
+    // Create a temporary link and trigger download
+    const link = document.createElement('a');
+    link.href = `/jobs/${fileName}`; // Adjust path based on backend
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleMenuClick = (e, jobId) => {
+    e.stopPropagation();
+    
+    if (activeMenuId === jobId) {
+      setActiveMenuId(null);
+      return;
+    }
+
+    // Calculate menu position to avoid being hidden at bottom
+    const button = e.currentTarget;
+    const rect = button.getBoundingClientRect();
+    const menuHeight = 140; // Approximate menu height
+    const spaceBelow = window.innerHeight - rect.bottom;
+    
+    let top = rect.bottom + window.scrollY;
+    let right = window.innerWidth - rect.right;
+
+    // If not enough space below, position above the button
+    if (spaceBelow < menuHeight) {
+      top = rect.top + window.scrollY - menuHeight;
+    }
+
+    setMenuPosition({ top, right });
+    setActiveMenuId(jobId);
+  };
+
   // ✅ FILTER
   let filtered = jobs.filter((j) =>
     (managerFilter === 'All Managers' || j.manager === managerFilter) &&
+    (jobFilter === 'All Jobs' || j.title === jobFilter) &&
     (
       j.title.toLowerCase().includes(search.toLowerCase()) ||
       j.manager.toLowerCase().includes(search.toLowerCase())
@@ -142,6 +193,13 @@ function Jobs() {
 
               {/* FILTERS */}
               <div className="jobs-filters">
+               <select className="filter-select" onChange={(e) => setJobFilter(e.target.value)}>
+                  <option>All Jobs</option>
+                  {jobTitles.map((title) => (
+                    <option key={title}>{title}</option>
+                  ))}
+                </select>
+
                 <select
                   className="filter-select"
                   value={managerFilter}
@@ -174,12 +232,14 @@ function Jobs() {
               </div>
 
               {/* ✅ UPDATED BUTTON */}
-              <button
-                className="btn-add-job"
-                onClick={() => setIsModalOpen(true)}
-              >
-                + Add Job
-              </button>
+              {canAddJob && (
+                <button
+                  className="btn-add-job"
+                  onClick={() => setIsModalOpen(true)}
+                >
+                  + Add Job
+                </button>
+              )}
 
             </div>
           </div>
@@ -208,19 +268,21 @@ function Jobs() {
                     <td>{job.lastUpdated}</td>
 
                     <td>
-                      <span className="pdf-link">📄 {job.fileName}</span>
+                      <span 
+                        className="pdf-link" 
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => handleDownloadPDF(job.fileName)}
+                        title="Click to download"
+                      >
+                        📄 {job.fileName}
+                      </span>
                     </td>
 
                     {/* ACTION MENU */}
                     <td style={{ position: 'relative' }}>
                       <button
                         className="more-btn"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setActiveMenuId(prev =>
-                            prev === job.id ? null : job.id
-                          );
-                        }}
+                        onClick={(e) => handleMenuClick(e, job.id)}
                       >
                          ⋮
                       </button>
@@ -228,6 +290,7 @@ function Jobs() {
                       {activeMenuId === job.id && (
                         <div
                           className="dropdown-menu"
+                          style={{ top: `${menuPosition.top}px`, right: `${menuPosition.right}px` }}
                           onClick={(e) => e.stopPropagation()}
                         >
                           <div className="dropdown-header">
@@ -275,6 +338,7 @@ function Jobs() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onAdd={handleAddJob}
+        currentUser={currentUser}
       />
 
     </div>

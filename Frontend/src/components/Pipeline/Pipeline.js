@@ -16,6 +16,7 @@ function Pipeline() {
   const [search, setSearch] = useState('');
   const [jobFilter, setJobFilter] = useState('All Jobs');
   const [stageFilter, setStageFilter] = useState('All Stages');
+    const [sortBy, setSortBy] = useState('Latest');
   const [jobOptions, setJobOptions] = useState(['All Jobs']);
 
   const [candidates, setCandidates] = useState([]);
@@ -150,15 +151,6 @@ function Pipeline() {
             <h2 className="pipeline-title">Hiring Pipeline</h2>
 
             <div className="pipeline-header-right">
-              <div className="search-box">
-                <span>🔍</span>
-                <input
-                  type="text"
-                  placeholder="Search candidates..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-              </div>
 
               <select value={jobFilter} onChange={(e) => setJobFilter(e.target.value)}>
                 {jobOptions.map(job => (
@@ -172,6 +164,23 @@ function Pipeline() {
                 <option>Shortlisted</option>
                 <option>Selected</option>
               </select>
+
+                <select className="filter-select" onChange={(e) => setSortBy(e.target.value)}>
+                  <option value="Latest">Sort: Latest</option>
+                  <option value="Oldest">Sort: Oldest</option>
+                  <option value="Name">Sort: Name</option>
+                </select>
+
+               <div className="search-box">
+                <span>🔍</span>
+                <input
+                  type="text"
+                  placeholder="Search candidates..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+
             </div>
           </div>
 

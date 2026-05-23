@@ -343,6 +343,7 @@ public class CandidateServiceImpl implements CandidateService {
 
         c.setCurrentCompany(dto.getCurrentCompany());
         c.setCurrentCtc(dto.getCurrentCtc());
+        c.setActiveJob(dto.getActiveJob());
 
         c.setEducation(dto.getEducation());
         c.setEducationDetails(toJson(dto.getEducationDetails()));
@@ -408,6 +409,7 @@ public class CandidateServiceImpl implements CandidateService {
         dto.setHighestEducation(c.getHighestEducation());
         dto.setPrimarySkill(c.getPrimarySkill());
         dto.setDomain(c.getDomain());
+        dto.setActiveJob(c.getActiveJob());
 
         dto.setSkills(c.getSkills());
         dto.setSkillsDetailed(c.getSkillsDetailed());
@@ -513,6 +515,7 @@ public class CandidateServiceImpl implements CandidateService {
         ));
         dto.setPrimarySkill(scalarTextValue(data, "primarySkill"));
         dto.setDomain(scalarTextValue(data, "domain"));
+        dto.setActiveJob(scalarTextValue(data, "activeJob"));
         dto.setDepartment(firstNonBlank(
                 scalarTextValue(data, "department"),
                 scalarTextValue(data, "currentJobTitle"),
@@ -972,11 +975,40 @@ public class CandidateServiceImpl implements CandidateService {
         if (value == null || value.isBlank()) {
             return null;
         }
+
+        String v = value.trim();
+        // Try ISO first
         try {
-            return LocalDate.parse(value);
-        } catch (Exception ex) {
-            return null;
+            return LocalDate.parse(v);
+        } catch (Exception ignored) {
         }
+
+        // Try common patterns
+        String[] patterns = new String[]{"yyyy-MM-dd", "yyyy-MM", "dd-MM-yyyy", "dd/MM/yyyy", "MMM yyyy", "MMMM yyyy", "MM/yyyy"};
+        for (String p : patterns) {
+            try {
+                java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern(p);
+                if (p.equals("yyyy-MM") || p.equals("MMM yyyy") || p.equals("MMMM yyyy") || p.equals("MM/yyyy")) {
+                    java.time.YearMonth ym = java.time.YearMonth.parse(v, fmt);
+                    return ym.atDay(1);
+                } else {
+                    return LocalDate.parse(v, fmt);
+                }
+            } catch (Exception ignored) {
+            }
+        }
+
+        // Fallback: try to extract a 4-digit year and return Jan 1 of that year
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(19|20)\\d{2}").matcher(v);
+        if (m.find()) {
+            try {
+                int y = Integer.parseInt(m.group());
+                return LocalDate.of(y, 1, 1);
+            } catch (Exception ignored) {
+            }
+        }
+
+        return null;
     }
 
     private PipelineStage parseStage(String value) {

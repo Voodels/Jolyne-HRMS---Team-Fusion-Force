@@ -6,49 +6,23 @@ import { getJobTitles } from '../../api/jobApi';
 
 const BASE_URL = process.env.REACT_APP_API_BASE_URL;
 
-<<<<<<< HEAD
 const INITIAL_FORM = {
   name: '',
-=======
-const getInitialFormState = () => ({
-  // ===== BASIC =====
-  name: '',
-  fullName: '',
->>>>>>> 5d6e6ebe81eeff2faafe3f5c617ce676ff91a4cd
   firstName: '',
   middleName: '',
   lastName: '',
   email: '',
   department: '',
-<<<<<<< HEAD
   resume: null,
   // keep other fields if needed but initialize minimally
   resumeUrl: '',
+  activeJob: '',
   currentStage: 'APPLIED'
 };
-=======
-  jobTitle: '',
->>>>>>> 5d6e6ebe81eeff2faafe3f5c617ce676ff91a4cd
 
 function AddCandidateModal({ isOpen, onClose, onAdd, editData }) {
 
-<<<<<<< HEAD
   const [form, setForm] = useState(INITIAL_FORM);
-=======
-  // ===== PIPELINE =====
-  currentStage: 'APPLIED',
-
-  // ===== UI FIELDS =====
-  skills: '',
-
-  // ===== FILE =====
-  resume: null
-});
-
-function AddCandidateModal({ isOpen, onClose, onAdd, editData }) {
-
-  const [form, setForm] = useState(getInitialFormState());
->>>>>>> 5d6e6ebe81eeff2faafe3f5c617ce676ff91a4cd
 
   const [resumeUrl, setResumeUrl] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -225,6 +199,7 @@ const lastName = parsed?.lastName || "";
       "";
 
     const domain = parsed?.domain || "";
+    const activeJob = parsed?.activeJob || "";
 
     // ================= EXPERIENCE =================
     const totalExperienceYears = parsed?.totalExperienceYears || 0;
@@ -303,6 +278,7 @@ const lastName = parsed?.lastName || "";
 
       currentJobTitle: prev.currentJobTitle || jobTitle,
       currentCompany: prev.currentCompany || currentCompany,
+      activeJob: prev.activeJob || activeJob,
       domain: prev.domain || domain,
 
       highestEducation: prev.highestEducation || highestEducation,
@@ -346,14 +322,10 @@ const handleSubmit = async (e) => {
   try {
     setLoading(true);
 
-
-    // Minimal payload: frontend should only send name, email, department, resumeUrl
-    const payload = {
-      name: form.name,
-      email: form.email,
-      department: form.department,
-      resumeUrl: resumeUrl,
-    };
+    // Send parsed candidate fields to backend so they are persisted
+    const { resume, ...payload } = form;
+    payload.resumeUrl = resumeUrl;
+    payload.currentStage = payload.currentStage || "APPLIED";
 
     let url = `${BASE_URL}/candidates`;
     let method = "POST";
@@ -376,13 +348,8 @@ const handleSubmit = async (e) => {
     onAdd();
     onClose();
 
-<<<<<<< HEAD
     // ✅ Reset to initial minimal form
     setForm(INITIAL_FORM);
-=======
-    // ✅ Reset (important for structured forms)
-    setForm(getInitialFormState());
->>>>>>> 5d6e6ebe81eeff2faafe3f5c617ce676ff91a4cd
     setResumeUrl("");
 
   } catch (err) {
