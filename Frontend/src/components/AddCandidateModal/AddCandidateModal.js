@@ -111,6 +111,7 @@ function AddCandidateModal({ isOpen, onClose, onAdd, editData }) {
 
       console.log("Cloudinary URL:", url);
       setResumeUrl(url);
+      setForm(prev => ({ ...prev, resumeUrl: url }));
 
     } catch (err) {
       console.error(err);
@@ -136,7 +137,7 @@ const parseResume = async (file) => {
     const data = await res.json();
     console.log("Affinda Response:", data);
 
-    const parsed = data?.data || {};
+    const parsed = data?.data || data || {};
 
     // ================= BASIC =================
     const name =

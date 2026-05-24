@@ -35,7 +35,8 @@ function Candidates() {
   const [menuPosition, setMenuPosition] = useState({ top: 0, right: 0 });
   const [currentUser, setCurrentUser] = useState(null);
   const [appPermissions, setAppPermissions] = useState(DEFAULT_APP_PERMISSIONS);
-  const canAddCandidate = appPermissions.allowAddCandidate && currentUser?.role !== 'manager';
+  const canAddCandidate = appPermissions.allowAddCandidate;
+  const canManageCandidate = currentUser?.role === 'manager' || currentUser?.role === 'hr' || currentUser?.role === 'director';
 
   // ---------------- Sidebar ----------------
   const toggleSidebar = () => {
@@ -397,8 +398,12 @@ const clearNotifications = () => {
                             </div>
 
                             <div className="dropdown-item" onClick={() => handleView(c.id)}>👁 View</div>
-                            <div className="dropdown-item" onClick={() => handleEdit(c)}>✏ Edit</div>
-                            <div className="dropdown-item delete" onClick={() => handleDelete(c.id)}>🗑 Delete</div>
+                            {canManageCandidate && (
+                              <>
+                                <div className="dropdown-item" onClick={() => handleEdit(c)}>✏ Edit</div>
+                                <div className="dropdown-item delete" onClick={() => handleDelete(c.id)}>🗑 Delete</div>
+                              </>
+                            )}
                           </div>
                         )}
                       </td>

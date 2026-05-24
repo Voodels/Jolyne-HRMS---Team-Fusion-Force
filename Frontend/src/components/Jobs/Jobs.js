@@ -23,7 +23,13 @@ function Jobs() {
   const [menuPosition, setMenuPosition] = useState({ top: 0, right: 0 });
   const [currentUser, setCurrentUser] = useState(null);
   const [appPermissions, setAppPermissions] = useState(DEFAULT_APP_PERMISSIONS);
-  const canAddJob = appPermissions.allowAddJob && currentUser?.role !== 'hr';
+  const canAddJob = appPermissions.allowAddJob;
+  const canManageJob = (job) => {
+    if (!currentUser?.role) return false;
+    if (currentUser.role === 'hr' || currentUser.role === 'director') return true;
+    if (currentUser.role === 'manager') return job.manager === currentUser.name;
+    return false;
+  };
 
   // ✅ NEW: modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -306,14 +312,16 @@ function Jobs() {
                           <div className="dropdown-item" onClick={() => handleView(job)}>
                             👁 View
                           </div>
-
-                          <div className="dropdown-item" onClick={() => handleEdit(job)}>
-                            ✏ Edit
-                          </div>
-
-                          <div className="dropdown-item delete" onClick={() => handleDelete(job.id)}>
-                            🗑 Delete
-                          </div>
+                          {canManageJob(job) && (
+                            <>
+                              <div className="dropdown-item" onClick={() => handleEdit(job)}>
+                                ✏ Edit
+                              </div>
+                              <div className="dropdown-item delete" onClick={() => handleDelete(job.id)}>
+                                🗑 Delete
+                              </div>
+                            </>
+                          )}
                         </div>
                       )}
                     </td>

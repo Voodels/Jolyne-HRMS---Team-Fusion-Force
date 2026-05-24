@@ -1,20 +1,8 @@
 
-YET TO ADD (postman)
 
-GET CANDIDATE BY PAGINATION 
+TODO
 
-GET CANDIDATE BY NAME 
-
-GET CANDIDATE BY SKILL 
-
-TODO (Frontend)
-
-Pipleline 
-
-///////// SMTP 
-
-///////// Interview scheduling 
-
-///////// Li - Gi --> Parsing --> (Summary) 
-
-///////// 
+1) SMTP 
+2) Interview scheduling
+3) Social Account Parsing 
+4) OTP Service 
