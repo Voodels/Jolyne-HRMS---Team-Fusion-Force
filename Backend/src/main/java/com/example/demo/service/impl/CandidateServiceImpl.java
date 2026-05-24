@@ -343,6 +343,7 @@ public class CandidateServiceImpl implements CandidateService {
 
         c.setCurrentCompany(dto.getCurrentCompany());
         c.setCurrentCtc(dto.getCurrentCtc());
+        c.setActiveJob(dto.getActiveJob());
 
         c.setEducation(dto.getEducation());
         c.setEducationDetails(toJson(dto.getEducationDetails()));
@@ -408,6 +409,7 @@ public class CandidateServiceImpl implements CandidateService {
         dto.setHighestEducation(c.getHighestEducation());
         dto.setPrimarySkill(c.getPrimarySkill());
         dto.setDomain(c.getDomain());
+        dto.setActiveJob(c.getActiveJob());
 
         dto.setSkills(c.getSkills());
         dto.setSkillsDetailed(c.getSkillsDetailed());
@@ -446,11 +448,28 @@ public class CandidateServiceImpl implements CandidateService {
         JsonNode data = root.has("data") && root.get("data").isObject() ? root.get("data") : root;
         CandidateRequestDto dto = new CandidateRequestDto();
 
-        dto.setName(scalarTextValue(data, "name"));
-        dto.setFullName(firstNonBlank(scalarTextValue(data, "fullName"), scalarTextValue(data, "name")));
-        dto.setFirstName(firstNonBlank(scalarTextValue(data, "firstName"), scalarTextValue(data.path("name"), "first")));
-        dto.setMiddleName(firstNonBlank(scalarTextValue(data, "middleName"), scalarTextValue(data.path("name"), "middle")));
-        dto.setLastName(firstNonBlank(scalarTextValue(data, "lastName"), scalarTextValue(data.path("name"), "last")));
+        dto.setName(firstNonBlank(
+                scalarTextValue(data, "fullName"),
+                scalarTextValue(data, "name"),
+                scalarTextValue(data.path("name"), "raw")
+        ));
+        dto.setFullName(firstNonBlank(
+                scalarTextValue(data, "fullName"),
+                scalarTextValue(data, "name"),
+                scalarTextValue(data.path("name"), "raw")
+        ));
+        dto.setFirstName(firstNonBlank(
+                scalarTextValue(data, "firstName"),
+                scalarTextValue(data.path("name"), "first")
+        ));
+        dto.setMiddleName(firstNonBlank(
+                scalarTextValue(data, "middleName"),
+                scalarTextValue(data.path("name"), "middle")
+        ));
+        dto.setLastName(firstNonBlank(
+                scalarTextValue(data, "lastName"),
+                scalarTextValue(data.path("name"), "last")
+        ));
 
         dto.setEmail(firstNonBlank(scalarTextValue(data, "email"), firstArrayText(data, "emails")));
         dto.setPhone(firstNonBlank(scalarTextValue(data, "phone"), firstArrayText(data, "phoneNumbers")));
@@ -480,16 +499,39 @@ public class CandidateServiceImpl implements CandidateService {
 
         dto.setYearsOfExperience(intValue(data, "yearsOfExperience"));
         dto.setTotalExperienceYears(doubleValue(data, "totalExperienceYears", "totalYearsExperience"));
-        dto.setCurrentJobTitle(firstNonBlank(scalarTextValue(data, "currentJobTitle"), scalarTextValue(data, "jobTitle")));
-        dto.setCurrentCompany(scalarTextValue(data, "currentCompany"));
+        dto.setCurrentJobTitle(firstNonBlank(
+                scalarTextValue(data, "currentJobTitle"),
+                nestedScalarTextValue(data, "experience", "0", "jobTitle"),
+                scalarTextValue(data, "jobTitle")
+        ));
+        dto.setCurrentCompany(firstNonBlank(
+                scalarTextValue(data, "currentCompany"),
+                nestedScalarTextValue(data, "experience", "0", "companyName")
+        ));
         dto.setCurrentCtc(scalarTextValue(data, "currentCtc"));
-        dto.setHighestEducation(scalarTextValue(data, "highestEducation"));
+        dto.setHighestEducation(firstNonBlank(
+                scalarTextValue(data, "highestEducation"),
+                extractEducationSummary(data)
+        ));
         dto.setPrimarySkill(scalarTextValue(data, "primarySkill"));
         dto.setDomain(scalarTextValue(data, "domain"));
-        dto.setDepartment(firstNonBlank(scalarTextValue(data, "department"), scalarTextValue(data, "currentJobTitle"), scalarTextValue(data, "jobTitle")));
+        dto.setActiveJob(scalarTextValue(data, "activeJob"));
+        dto.setDepartment(firstNonBlank(
+                scalarTextValue(data, "department"),
+                scalarTextValue(data, "currentJobTitle"),
+                scalarTextValue(data, "jobTitle"),
+                nestedScalarTextValue(data, "experience", "0", "jobTitle")
+        ));
 
-        dto.setSkills(firstNonBlank(scalarTextValue(data, "skills"), extractSkillsString(firstNode(data, "skillsDetailed", "skills"))));
-        dto.setEducation(firstNonBlank(scalarTextValue(data, "education"), scalarTextValue(data, "highestEducation")));
+        dto.setSkills(firstNonBlank(
+                extractSkillsString(firstNode(data, "skills", "skillsDetailed")),
+                scalarTextValue(data, "skills")
+        ));
+        dto.setEducation(firstNonBlank(
+                scalarTextValue(data, "education"),
+                scalarTextValue(data, "highestEducation"),
+                extractEducationSummary(data)
+        ));
 
         dto.setResumeUrl(scalarTextValue(data, "resumeUrl"));
         dto.setResumeText(scalarTextValue(data, "resumeText"));
@@ -511,7 +553,235 @@ public class CandidateServiceImpl implements CandidateService {
         dto.setCurrentStage(parseStage(scalarTextValue(data, "currentStage")));
         dto.setStageHistory(firstNode(data, "stageHistory"));
 
+        fillMissingFromSectionData(dto, data);
+
         return dto;
+    }
+
+    private void fillMissingFromSectionData(CandidateRequestDto dto, JsonNode data) {
+        JsonNode names = firstNode(data, "sectionName");
+        JsonNode sections = firstNonNullNode(firstNode(data, "sectionData"), firstNode(data, "sections"));
+        if (sections == null) {
+            return;
+        }
+
+        if (sections.isArray()) {
+            for (int i = 0; i < sections.size(); i++) {
+                JsonNode section = sections.get(i);
+                String sectionName = extractSectionName(names, section, i);
+                String sectionText = extractTextFromSection(section);
+                if (sectionText == null || sectionText.isBlank()) {
+                    continue;
+                }
+
+                if (dto.getSummaryText() == null && isSummarySection(sectionName, sectionText)) {
+                    dto.setSummaryText(sectionText);
+                }
+
+                if (dto.getSkills() == null && isSkillsSection(sectionName, sectionText)) {
+                    dto.setSkills(sectionText);
+                }
+
+                if (dto.getHighestEducation() == null && isEducationSection(sectionName, sectionText)) {
+                    dto.setHighestEducation(sectionText);
+                }
+
+                if (dto.getCurrentJobTitle() == null && isExperienceSection(sectionName, sectionText)) {
+                    String title = extractCurrentJobTitle(sectionText);
+                    if (title != null) {
+                        dto.setCurrentJobTitle(title);
+                    }
+                }
+
+                if (dto.getCurrentCompany() == null && isExperienceSection(sectionName, sectionText)) {
+                    String company = extractCurrentCompany(sectionText);
+                    if (company != null) {
+                        dto.setCurrentCompany(company);
+                    }
+                }
+
+                if (dto.getEmail() == null) {
+                    String email = extractEmail(sectionText);
+                    if (email != null) {
+                        dto.setEmail(email);
+                    }
+                }
+
+                if (dto.getPhone() == null) {
+                    String phone = extractPhone(sectionText);
+                    if (phone != null) {
+                        dto.setPhone(phone);
+                    }
+                }
+
+                if (dto.getFullName() == null) {
+                    String name = extractNameFromHeader(sectionText);
+                    if (name != null) {
+                        dto.setFullName(name);
+                        String[] parts = splitName(name);
+                        dto.setFirstName(parts[0]);
+                        dto.setLastName(parts[1]);
+                    }
+                }
+
+                if (dto.getLocation() == null && isLocationSection(sectionName, sectionText)) {
+                    dto.setLocation(sectionText);
+                }
+
+                if (dto.getDepartment() == null && isDepartmentSection(sectionName, sectionText)) {
+                    dto.setDepartment(sectionText);
+                }
+            }
+        }
+    }
+
+    private String extractSectionName(JsonNode names, JsonNode section, int index) {
+        if (names != null && names.isArray() && names.size() > index) {
+            JsonNode item = names.get(index);
+            if (item != null) {
+                String text = item.isTextual() ? item.asText() : textValue(item, "name");
+                if (text != null && !text.isBlank()) {
+                    return text.trim();
+                }
+            }
+        }
+        if (section != null) {
+            if (section.isTextual()) {
+                return "";
+            }
+            String sectionName = scalarTextValue(section, "sectionName");
+            if (sectionName == null) {
+                sectionName = scalarTextValue(section, "name");
+            }
+            if (sectionName == null && section.has("title")) {
+                sectionName = scalarTextValue(section, "title");
+            }
+            if (sectionName != null) {
+                return sectionName;
+            }
+        }
+        return null;
+    }
+
+    private String extractTextFromSection(JsonNode section) {
+        if (section == null || section.isNull()) {
+            return null;
+        }
+        if (section.isTextual()) {
+            return section.asText().trim();
+        }
+        if (section.isObject() || section.isArray()) {
+            StringBuilder sb = new StringBuilder();
+            collectText(section, sb);
+            return sb.toString().trim();
+        }
+        return null;
+    }
+
+    private void collectText(JsonNode node, StringBuilder sb) {
+        if (node == null || node.isNull()) {
+            return;
+        }
+        if (node.isTextual()) {
+            String text = node.asText().trim();
+            if (!text.isBlank()) {
+                if (sb.length() > 0) {
+                    sb.append(" ");
+                }
+                sb.append(text);
+            }
+            return;
+        }
+        if (node.isArray()) {
+            for (JsonNode child : node) {
+                collectText(child, sb);
+            }
+            return;
+        }
+        if (node.isObject()) {
+            for (java.util.Iterator<String> it = node.fieldNames(); it.hasNext(); ) {
+                collectText(node.get(it.next()), sb);
+            }
+        }
+    }
+
+    private boolean isSummarySection(String sectionName, String text) {
+        String lower = sectionName == null ? "" : sectionName.toLowerCase();
+        return lower.contains("summary") || lower.contains("objective") || lower.contains("profile") || lower.contains("about") || text.length() < 300;
+    }
+
+    private boolean isSkillsSection(String sectionName, String text) {
+        String lower = sectionName == null ? "" : sectionName.toLowerCase();
+        return lower.contains("skill") || lower.contains("technologies") || lower.contains("technical");
+    }
+
+    private boolean isEducationSection(String sectionName, String text) {
+        String lower = sectionName == null ? "" : sectionName.toLowerCase();
+        return lower.contains("education") || lower.contains("academics") || lower.contains("qualification");
+    }
+
+    private boolean isExperienceSection(String sectionName, String text) {
+        String lower = sectionName == null ? "" : sectionName.toLowerCase();
+        return lower.contains("experience") || lower.contains("employment") || lower.contains("work");
+    }
+
+    private boolean isLocationSection(String sectionName, String text) {
+        String lower = sectionName == null ? "" : sectionName.toLowerCase();
+        return lower.contains("location") || lower.contains("address") || lower.contains("contact");
+    }
+
+    private boolean isDepartmentSection(String sectionName, String text) {
+        String lower = sectionName == null ? "" : sectionName.toLowerCase();
+        return lower.contains("department") || lower.contains("role") || lower.contains("designation");
+    }
+
+    private String extractEmail(String text) {
+        if (text == null) {
+            return null;
+        }
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-z]{2,}", java.util.regex.Pattern.CASE_INSENSITIVE).matcher(text);
+        return matcher.find() ? matcher.group() : null;
+    }
+
+    private String extractPhone(String text) {
+        if (text == null) {
+            return null;
+        }
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(?:\\+?\\d{1,3}[\\s-]?)?(?:\\(?\\d{2,4}\\)?[\\s-]?)?\\d{6,12}").matcher(text);
+        return matcher.find() ? matcher.group() : null;
+    }
+
+    private String extractCurrentJobTitle(String text) {
+        if (text == null) {
+            return null;
+        }
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(Senior|Lead|Manager|Developer|Engineer|Consultant|Analyst|Architect|Specialist|Director)[^\\n,;]{1,50}", java.util.regex.Pattern.CASE_INSENSITIVE).matcher(text);
+        return matcher.find() ? matcher.group().trim() : null;
+    }
+
+    private String extractCurrentCompany(String text) {
+        if (text == null) {
+            return null;
+        }
+        java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(at|@)\\s*([A-Za-z0-9&.,'()\\- ]{2,50})", java.util.regex.Pattern.CASE_INSENSITIVE).matcher(text);
+        if (matcher.find()) {
+            return matcher.group(2).trim();
+        }
+        return null;
+    }
+
+    private String extractNameFromHeader(String text) {
+        if (text == null) {
+            return null;
+        }
+        String[] lines = text.split("[\\r\\n]+");
+        if (lines.length > 0) {
+            String candidate = lines[0].trim();
+            if (candidate.length() > 2 && candidate.length() < 60 && !candidate.contains("@") && !candidate.matches(".*\\d.*")) {
+                return candidate;
+            }
+        }
+        return null;
     }
 
     private String resolveFullName(CandidateRequestDto dto) {
@@ -580,6 +850,57 @@ public class CandidateServiceImpl implements CandidateService {
             }
         }
 
+        return null;
+    }
+
+    private JsonNode nestedNode(JsonNode node, String... path) {
+        if (node == null) {
+            return null;
+        }
+
+        JsonNode current = node;
+        for (String segment : path) {
+            if (current == null || current.isNull() || current.isMissingNode()) {
+                return null;
+            }
+            if (segment.matches("\\d+")) {
+                int index = Integer.parseInt(segment);
+                if (!current.isArray() || current.size() <= index) {
+                    return null;
+                }
+                current = current.get(index);
+            } else {
+                current = current.get(segment);
+            }
+        }
+        return current;
+    }
+
+    private String nestedScalarTextValue(JsonNode node, String... path) {
+        JsonNode value = nestedNode(node, path);
+        if (value == null || value.isNull() || !value.isValueNode()) {
+            return null;
+        }
+
+        String text = value.asText();
+        return text == null || text.isBlank() ? null : text.trim();
+    }
+
+    private String extractEducationSummary(JsonNode data) {
+        JsonNode educationNode = firstNode(data, "education");
+        if (educationNode != null && educationNode.isArray() && educationNode.size() > 0) {
+            JsonNode first = educationNode.get(0);
+            String degree = firstNonBlank(
+                    textValue(first, "degree"),
+                    textValue(first, "fieldOfStudy"),
+                    textValue(first, "specialization")
+            );
+            String institution = firstNonBlank(
+                    textValue(first, "institutionName"),
+                    textValue(first, "institutionLocation")
+            );
+            return firstNonBlank(degree, institution);
+        }
         return null;
     }
 
@@ -654,11 +975,40 @@ public class CandidateServiceImpl implements CandidateService {
         if (value == null || value.isBlank()) {
             return null;
         }
+
+        String v = value.trim();
+        // Try ISO first
         try {
-            return LocalDate.parse(value);
-        } catch (Exception ex) {
-            return null;
+            return LocalDate.parse(v);
+        } catch (Exception ignored) {
         }
+
+        // Try common patterns
+        String[] patterns = new String[]{"yyyy-MM-dd", "yyyy-MM", "dd-MM-yyyy", "dd/MM/yyyy", "MMM yyyy", "MMMM yyyy", "MM/yyyy"};
+        for (String p : patterns) {
+            try {
+                java.time.format.DateTimeFormatter fmt = java.time.format.DateTimeFormatter.ofPattern(p);
+                if (p.equals("yyyy-MM") || p.equals("MMM yyyy") || p.equals("MMMM yyyy") || p.equals("MM/yyyy")) {
+                    java.time.YearMonth ym = java.time.YearMonth.parse(v, fmt);
+                    return ym.atDay(1);
+                } else {
+                    return LocalDate.parse(v, fmt);
+                }
+            } catch (Exception ignored) {
+            }
+        }
+
+        // Fallback: try to extract a 4-digit year and return Jan 1 of that year
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(19|20)\\d{2}").matcher(v);
+        if (m.find()) {
+            try {
+                int y = Integer.parseInt(m.group());
+                return LocalDate.of(y, 1, 1);
+            } catch (Exception ignored) {
+            }
+        }
+
+        return null;
     }
 
     private PipelineStage parseStage(String value) {
@@ -720,5 +1070,98 @@ public class CandidateServiceImpl implements CandidateService {
             }
         }
         return null;
+    }
+
+    private CandidateRequestDto enrichDtoFromResume(CandidateRequestDto dto) throws Exception {
+        if ((dto.getResumeUrl() == null || dto.getResumeUrl().isBlank())
+                && (dto.getResumeText() == null || dto.getResumeText().isBlank())) {
+            return dto;
+        }
+
+        CandidateRequestDto parsed = null;
+
+        // Try Affinda using resume URL if API key available
+        if (affindaApiKey != null && !affindaApiKey.isBlank() && dto.getResumeUrl() != null && !dto.getResumeUrl().isBlank()) {
+            try {
+                byte[] bytes = restTemplate.getForObject(dto.getResumeUrl(), byte[].class);
+                if (bytes != null && bytes.length > 0) {
+                    HttpHeaders headers = new HttpHeaders();
+                    headers.setBearerAuth(affindaApiKey);
+                    headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+
+                    org.springframework.util.MultiValueMap<String, Object> body = new org.springframework.util.LinkedMultiValueMap<>();
+                    body.add("file", new org.springframework.core.io.ByteArrayResource(bytes) {
+                        @Override
+                        public String getFilename() {
+                            return "resume";
+                        }
+                    });
+
+                    HttpEntity<org.springframework.util.MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body, headers);
+                    ResponseEntity<String> response = restTemplate.exchange(
+                            AFFINDA_API_URL,
+                            HttpMethod.POST,
+                            requestEntity,
+                            String.class
+                    );
+
+                    String json = response.getBody();
+                    if (json != null && !json.isBlank()) {
+                        parsed = mapJsonNodeToRequestDto(objectMapper.readTree(json));
+                    }
+                }
+            } catch (Exception ex) {
+                // ignore and fall back to text parsing
+            }
+        }
+
+        // If Affinda not used or failed, try parsing plain text
+        if (parsed == null && dto.getResumeText() != null && !dto.getResumeText().isBlank()) {
+            parsed = parsePlainTextResume(dto.getResumeText());
+        }
+
+        if (parsed == null) {
+            return dto;
+        }
+
+        // Prefer frontend-provided minimal fields (name, email, department, resume links/text)
+        parsed.setName(firstNonBlank(dto.getName(), parsed.getName()));
+        parsed.setFullName(firstNonBlank(dto.getFullName(), parsed.getFullName()));
+        parsed.setFirstName(firstNonBlank(dto.getFirstName(), parsed.getFirstName()));
+        parsed.setLastName(firstNonBlank(dto.getLastName(), parsed.getLastName()));
+        parsed.setEmail(firstNonBlank(dto.getEmail(), parsed.getEmail()));
+        parsed.setDepartment(firstNonBlank(dto.getDepartment(), parsed.getDepartment()));
+        parsed.setResumeUrl(firstNonBlank(dto.getResumeUrl(), parsed.getResumeUrl()));
+        parsed.setResumeText(firstNonBlank(dto.getResumeText(), parsed.getResumeText()));
+
+        return parsed;
+    }
+
+    private CandidateRequestDto parsePlainTextResume(String text) {
+        CandidateRequestDto dto = new CandidateRequestDto();
+
+        if (text == null || text.isBlank()) return dto;
+
+        // Email
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-z]{2,}", java.util.regex.Pattern.CASE_INSENSITIVE).matcher(text);
+        if (m.find()) dto.setEmail(m.group());
+
+        // Phone (very permissive)
+        m = java.util.regex.Pattern.compile("(?:\\+?\\d{1,3}[\\s-]?)?(?:\\(?\\d{2,4}\\)?[\\s-]?)?\\d{6,12}").matcher(text);
+        if (m.find()) dto.setPhone(m.group());
+
+        // Skills section
+        java.util.regex.Matcher skillsMatcher = java.util.regex.Pattern.compile("(?im)^\\s*(Skills|SKILLS)[:\\-]?\\s*(.+)$", java.util.regex.Pattern.MULTILINE).matcher(text);
+        if (skillsMatcher.find()) dto.setSkills(skillsMatcher.group(2).trim());
+
+        // Education section
+        java.util.regex.Matcher eduMatcher = java.util.regex.Pattern.compile("(?im)^\\s*(Education|EDUCATION)[:\\-]?\\s*(.+)$", java.util.regex.Pattern.MULTILINE).matcher(text);
+        if (eduMatcher.find()) dto.setHighestEducation(eduMatcher.group(2).trim());
+
+        // Short summary fallback
+        String cleaned = text.replaceAll("\\r", " ").trim();
+        dto.setSummaryText(cleaned.length() > 300 ? cleaned.substring(0, 300) : cleaned);
+
+        return dto;
     }
 }

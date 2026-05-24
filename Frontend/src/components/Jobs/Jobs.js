@@ -2,17 +2,34 @@ import { useState, useEffect } from 'react';
 import Sidebar from '../Sidebar/Sidebar';
 import TopBar from '../TopBar/TopBar';
 import AddJobModal from '../AddJobModal/AddJobModal'; // ✅ import modal
+import { getJobs, createJob, deleteJob } from '../../api/jobApi';
+import { getAuthSession } from '../../api/authApi';
+import { DEFAULT_APP_PERMISSIONS, loadAppPermissions } from '../../api/permissionApi';
 import './Jobs.css';
 
 function Jobs() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [jobs, setJobs] = useState([]);
-
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [jobTitles, setJobTitles] = useState([]);
   const [search, setSearch] = useState('');
   const [managerFilter, setManagerFilter] = useState('All Managers');
   const [sortBy, setSortBy] = useState('Latest');
+  const [managers, setManagers] = useState(['All Managers']);
+  const [jobFilter, setJobFilter] = useState('All Jobs');
 
   const [activeMenuId, setActiveMenuId] = useState(null);
+  const [menuPosition, setMenuPosition] = useState({ top: 0, right: 0 });
+  const [currentUser, setCurrentUser] = useState(null);
+  const [appPermissions, setAppPermissions] = useState(DEFAULT_APP_PERMISSIONS);
+  const canAddJob = appPermissions.allowAddJob;
+  const canManageJob = (job) => {
+    if (!currentUser?.role) return false;
+    if (currentUser.role === 'hr' || currentUser.role === 'director') return true;
+    if (currentUser.role === 'manager') return job.manager === currentUser.name;
+    return false;
+  };
 
   // ✅ NEW: modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -35,15 +52,71 @@ function Jobs() {
     };
   }, []);
 
+  useEffect(() => {
+    const fetchJobs = async () => {
+      try {
+        const data = await getJobs();
+        setJobs(data);
+        
+        // Extract unique managers and job titles from jobs data
+        const uniqueManagers = ['All Managers', ...new Set(data.map(job => job.manager))];
+        const uniqueTitles = [...new Set(data.map(job => job.title))];
+        setManagers(uniqueManagers);
+        setJobTitles(uniqueTitles);
+      } catch (err) {
+        console.error('Failed to load jobs', err);
+        setError('Unable to load jobs.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchJobs();
+  }, []);
+
+  useEffect(() => {
+    setCurrentUser(getAuthSession());
+    setAppPermissions(loadAppPermissions());
+  }, []);
+
   // ✅ Add Job FROM MODAL
-  const handleAddJob = (newJob) => {
-    setJobs(prev => [...prev, newJob]);
+  const handleAddJob = async (newJob) => {
+    try {
+      const created = await createJob({
+        title: newJob.title,
+        manager: newJob.manager,
+        fileName: newJob.fileName,
+        description: newJob.description || '',
+      });
+      setJobs(prev => [...prev, created]);
+      
+      // Update managers list if new manager is added
+      setManagers(prev => {
+        const newManagers = ['All Managers', ...new Set([...prev.slice(1), created.manager])];
+        return newManagers;
+      });
+    } catch (err) {
+      console.error('Failed to add job', err);
+      setError('Unable to add job.');
+    }
   };
 
   // ✅ Delete
-  const handleDelete = (id) => {
-    setJobs(prev => prev.filter(j => j.id !== id));
-    setActiveMenuId(null);
+  const handleDelete = async (id) => {
+    try {
+      await deleteJob(id);
+      setJobs(prev => {
+        const updatedJobs = prev.filter(j => j.id !== id);
+        // Update managers list
+        const uniqueManagers = ['All Managers', ...new Set(updatedJobs.map(job => job.manager))];
+        setManagers(uniqueManagers);
+        return updatedJobs;
+      });
+      setActiveMenuId(null);
+    } catch (err) {
+      console.error('Failed to delete job', err);
+      setError('Unable to delete job.');
+    }
   };
 
   const handleView = (job) => {
@@ -54,9 +127,46 @@ function Jobs() {
     console.log('Edit:', job);
   };
 
+  const handleDownloadPDF = (fileName) => {
+    // Create a temporary link and trigger download
+    const link = document.createElement('a');
+    link.href = `/jobs/${fileName}`; // Adjust path based on backend
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleMenuClick = (e, jobId) => {
+    e.stopPropagation();
+    
+    if (activeMenuId === jobId) {
+      setActiveMenuId(null);
+      return;
+    }
+
+    // Calculate menu position to avoid being hidden at bottom
+    const button = e.currentTarget;
+    const rect = button.getBoundingClientRect();
+    const menuHeight = 140; // Approximate menu height
+    const spaceBelow = window.innerHeight - rect.bottom;
+    
+    let top = rect.bottom + window.scrollY;
+    let right = window.innerWidth - rect.right;
+
+    // If not enough space below, position above the button
+    if (spaceBelow < menuHeight) {
+      top = rect.top + window.scrollY - menuHeight;
+    }
+
+    setMenuPosition({ top, right });
+    setActiveMenuId(jobId);
+  };
+
   // ✅ FILTER
   let filtered = jobs.filter((j) =>
     (managerFilter === 'All Managers' || j.manager === managerFilter) &&
+    (jobFilter === 'All Jobs' || j.title === jobFilter) &&
     (
       j.title.toLowerCase().includes(search.toLowerCase()) ||
       j.manager.toLowerCase().includes(search.toLowerCase())
@@ -89,13 +199,21 @@ function Jobs() {
 
               {/* FILTERS */}
               <div className="jobs-filters">
+               <select className="filter-select" onChange={(e) => setJobFilter(e.target.value)}>
+                  <option>All Jobs</option>
+                  {jobTitles.map((title) => (
+                    <option key={title}>{title}</option>
+                  ))}
+                </select>
+
                 <select
                   className="filter-select"
+                  value={managerFilter}
                   onChange={(e) => setManagerFilter(e.target.value)}
                 >
-                  <option>All Managers</option>
-                  <option>HR Manager</option>
-                  <option>Tech Lead</option>
+                  {managers.map(manager => (
+                    <option key={manager} value={manager}>{manager}</option>
+                  ))}
                 </select>
 
                 <select
@@ -120,19 +238,24 @@ function Jobs() {
               </div>
 
               {/* ✅ UPDATED BUTTON */}
-              <button
-                className="btn-add-job"
-                onClick={() => setIsModalOpen(true)}
-              >
-                + Add Job
-              </button>
+              {canAddJob && (
+                <button
+                  className="btn-add-job"
+                  onClick={() => setIsModalOpen(true)}
+                >
+                  + Add Job
+                </button>
+              )}
 
             </div>
           </div>
 
-          {/* TABLE */}
-          <div className="jobs-table-wrap">
-            <table className="jobs-table">
+          {error && <div className="jobs-error">{error}</div>}
+          {isLoading ? (
+            <div className="jobs-loading">Loading jobs...</div>
+          ) : (
+            <div className="jobs-table-wrap">
+              <table className="jobs-table">
               <thead>
                 <tr>
                   <th>Job Name</th>
@@ -151,19 +274,21 @@ function Jobs() {
                     <td>{job.lastUpdated}</td>
 
                     <td>
-                      <span className="pdf-link">📄 {job.fileName}</span>
+                      <span 
+                        className="pdf-link" 
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => handleDownloadPDF(job.fileName)}
+                        title="Click to download"
+                      >
+                        📄 {job.fileName}
+                      </span>
                     </td>
 
                     {/* ACTION MENU */}
                     <td style={{ position: 'relative' }}>
                       <button
                         className="more-btn"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setActiveMenuId(prev =>
-                            prev === job.id ? null : job.id
-                          );
-                        }}
+                        onClick={(e) => handleMenuClick(e, job.id)}
                       >
                          ⋮
                       </button>
@@ -171,6 +296,7 @@ function Jobs() {
                       {activeMenuId === job.id && (
                         <div
                           className="dropdown-menu"
+                          style={{ top: `${menuPosition.top}px`, right: `${menuPosition.right}px` }}
                           onClick={(e) => e.stopPropagation()}
                         >
                           <div className="dropdown-header">
@@ -186,14 +312,16 @@ function Jobs() {
                           <div className="dropdown-item" onClick={() => handleView(job)}>
                             👁 View
                           </div>
-
-                          <div className="dropdown-item" onClick={() => handleEdit(job)}>
-                            ✏ Edit
-                          </div>
-
-                          <div className="dropdown-item delete" onClick={() => handleDelete(job.id)}>
-                            🗑 Delete
-                          </div>
+                          {canManageJob(job) && (
+                            <>
+                              <div className="dropdown-item" onClick={() => handleEdit(job)}>
+                                ✏ Edit
+                              </div>
+                              <div className="dropdown-item delete" onClick={() => handleDelete(job.id)}>
+                                🗑 Delete
+                              </div>
+                            </>
+                          )}
                         </div>
                       )}
                     </td>
@@ -203,9 +331,10 @@ function Jobs() {
               </tbody>
             </table>
           </div>
+          )}
 
           {/* EMPTY */}
-          {filtered.length === 0 && (
+          {(!isLoading && filtered.length === 0) && (
             <p className="no-data">No jobs found</p>
           )}
 
@@ -217,6 +346,7 @@ function Jobs() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onAdd={handleAddJob}
+        currentUser={currentUser}
       />
 
     </div>

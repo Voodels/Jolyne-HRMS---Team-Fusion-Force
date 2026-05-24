@@ -33,8 +33,8 @@ function CandidateProfile() {
 
   const [candidate, setCandidate] = useState(null);
   const [loading, setLoading] = useState(true);
-
   const [showStageDropdown, setShowStageDropdown] = useState(false);
+  const [stageMenuPosition, setStageMenuPosition] = useState({ top: 0, right: 0 });
 
   const toggleSidebar = () => {
     setIsSidebarOpen(prev => !prev);
@@ -105,6 +105,23 @@ const resumeUrl = candidate?.resumeUrl;
       : '‹ Back to Candidates';
   };
 
+  const handleStageButtonClick = (e) => {
+    const button = e.currentTarget;
+    const rect = button.getBoundingClientRect();
+    const menuHeight = 240; // allow full list of stages
+    const spaceBelow = window.innerHeight - rect.bottom;
+
+    let top = rect.bottom + window.scrollY;
+    const right = window.innerWidth - rect.right;
+
+    if (spaceBelow < menuHeight) {
+      top = rect.top + window.scrollY - menuHeight;
+    }
+
+    setStageMenuPosition({ top, right });
+    setShowStageDropdown(prev => !prev);
+  };
+
   // ---------------- HELPERS ----------------
   const getInitials = () => {
     return candidate?.firstName?.charAt(0) || '';
@@ -163,14 +180,17 @@ const resumeUrl = candidate?.resumeUrl;
               {/* STAGE DROPDOWN BUTTON */}
               <button
                 className="btn-more-stage"
-                onClick={() => setShowStageDropdown(prev => !prev)}
+                onClick={handleStageButtonClick}
               >
                 More Stage ▾
               </button>
 
               {/* DROPDOWN */}
               {showStageDropdown && (
-                <div className="dropdown-menu" style={{ right: 0 }}>
+                <div
+                  className="dropdown-menu"
+                  style={{ top: `${stageMenuPosition.top}px`, right: `${stageMenuPosition.right}px`, position: 'fixed' }}
+                >
                   <div className="dropdown-header">
                     <span>Select Stage</span>
                     <button
@@ -193,7 +213,6 @@ const resumeUrl = candidate?.resumeUrl;
                 </div>
               )}
 
-              <button className="more-btn">⋮</button>
             </div>
           </div>
 
@@ -203,7 +222,7 @@ const resumeUrl = candidate?.resumeUrl;
               <div className="profile-big-avatar">{getInitials()}</div>
 
               <div className="profile-hero-info">
-                <h2 className="profile-name">{candidate.fullName}</h2>
+                <h2 className="profile-name">{candidate.firstName} {candidate.lastName}</h2>
                 <p className="profile-contact">
                   {candidate.email} · {candidate.phone}
                 </p>

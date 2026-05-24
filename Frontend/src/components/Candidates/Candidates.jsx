@@ -4,6 +4,9 @@ import Sidebar from '../Sidebar/Sidebar';
 import TopBar from '../TopBar/TopBar';
 import AddCandidateModal from '../AddCandidateModal/AddCandidateModal';
 import Loader from '../Loader/Loader';
+import { getJobTitles } from '../../api/jobApi';
+import { getAuthSession } from '../../api/authApi';
+import { DEFAULT_APP_PERMISSIONS, loadAppPermissions } from '../../api/permissionApi';
 import './Candidates.css';
 
 // ✅ ENV BASE URL
@@ -16,7 +19,8 @@ function Candidates() {
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [candidates, setCandidates] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [jobTitles, setJobTitles] = useState([]);
+  const [loading, setLoading] = useState(false);
 
   const [search, setSearch] = useState('');
   const [jobFilter, setJobFilter] = useState('All Jobs');
@@ -28,6 +32,11 @@ function Candidates() {
 
   const [notifications, setNotifications] = useState([]);
   const [editCandidate, setEditCandidate] = useState(null);
+  const [menuPosition, setMenuPosition] = useState({ top: 0, right: 0 });
+  const [currentUser, setCurrentUser] = useState(null);
+  const [appPermissions, setAppPermissions] = useState(DEFAULT_APP_PERMISSIONS);
+  const canAddCandidate = appPermissions.allowAddCandidate;
+  const canManageCandidate = currentUser?.role === 'manager' || currentUser?.role === 'hr' || currentUser?.role === 'director';
 
   // ---------------- Sidebar ----------------
   const toggleSidebar = () => {
@@ -110,7 +119,22 @@ function Candidates() {
 
   useEffect(() => {
     fetchCandidates();
+    fetchJobTitles();
   }, []);
+
+  useEffect(() => {
+    setCurrentUser(getAuthSession());
+    setAppPermissions(loadAppPermissions());
+  }, []);
+
+  const fetchJobTitles = async () => {
+    try {
+      const titles = await getJobTitles();
+      setJobTitles(titles);
+    } catch (err) {
+      console.error('Failed to load job titles', err);
+    }
+  };
 
   // ---------------- SEARCH ----------------
   const handleSearch = async (value) => {
@@ -183,6 +207,32 @@ const clearNotifications = () => {
     navigate(`/candidates/${id}`, { state: { from: 'candidates' } });
   };
 
+  const handleMenuClick = (e, candidateId) => {
+    e.stopPropagation();
+    
+    if (activeMenuId === candidateId) {
+      setActiveMenuId(null);
+      return;
+    }
+
+    // Calculate menu position to avoid being hidden at bottom
+    const button = e.currentTarget;
+    const rect = button.getBoundingClientRect();
+    const menuHeight = 140; // Approximate menu height
+    const spaceBelow = window.innerHeight - rect.bottom;
+    
+    let top = rect.bottom + window.scrollY;
+    let right = window.innerWidth - rect.right;
+
+    // If not enough space below, position above the button
+    if (spaceBelow < menuHeight) {
+      top = rect.top + window.scrollY - menuHeight;
+    }
+
+    setMenuPosition({ top, right });
+    setActiveMenuId(candidateId);
+  };
+
   // ---------------- EDIT ----------------
   const handleEdit = async (c) => {
   try {
@@ -237,9 +287,9 @@ const clearNotifications = () => {
               <div className="candidates-filters">
                 <select className="filter-select" onChange={(e) => setJobFilter(e.target.value)}>
                   <option>All Jobs</option>
-                  <option>ENGINEERING</option>
-                  <option>HR</option>
-                  <option>SALES</option>
+                  {jobTitles.map((title) => (
+                    <option key={title}>{title}</option>
+                  ))}
                 </select>
 
                 <select className="filter-select" onChange={(e) => setStageFilter(e.target.value)}>
@@ -267,9 +317,11 @@ const clearNotifications = () => {
                 />
               </div>
 
-              <button className="btn-add-candidate" onClick={() => setIsModalOpen(true)}>
-                + Add Candidate
-              </button>
+              {canAddCandidate && (
+                <button className="btn-add-candidate" onClick={() => setIsModalOpen(true)}>
+                  + Add Candidate
+                </button>
+              )}
             </div>
           </div>
 
@@ -324,16 +376,17 @@ const clearNotifications = () => {
                       <td style={{ position: 'relative' }}>
                         <button
                           className="more-btn"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setActiveMenuId(prev => prev === c.id ? null : c.id);
-                          }}
+                          onClick={(e) => handleMenuClick(e, c.id)}
                         >
                           ⋮
                         </button>
 
                         {activeMenuId === c.id && (
-                          <div className="dropdown-menu" onClick={(e) => e.stopPropagation()}>
+                          <div 
+                            className="dropdown-menu" 
+                            style={{ top: `${menuPosition.top}px`, right: `${menuPosition.right}px` }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
                             <div className="dropdown-header">
                               <span>Actions</span>
                               <button
@@ -345,8 +398,12 @@ const clearNotifications = () => {
                             </div>
 
                             <div className="dropdown-item" onClick={() => handleView(c.id)}>👁 View</div>
-                            <div className="dropdown-item" onClick={() => handleEdit(c)}>✏ Edit</div>
-                            <div className="dropdown-item delete" onClick={() => handleDelete(c.id)}>🗑 Delete</div>
+                            {canManageCandidate && (
+                              <>
+                                <div className="dropdown-item" onClick={() => handleEdit(c)}>✏ Edit</div>
+                                <div className="dropdown-item delete" onClick={() => handleDelete(c.id)}>🗑 Delete</div>
+                              </>
+                            )}
                           </div>
                         )}
                       </td>

@@ -10,6 +10,8 @@ import {
   getHistory,
   refreshSchema,
 } from '../../api/chatbotApi';
+import { getAuthSession } from '../../api/authApi';
+import { DEFAULT_APP_PERMISSIONS, loadAppPermissions } from '../../api/permissionApi';
 import './AIAssistant.css';
 
 function AIAssistant() {
@@ -28,6 +30,8 @@ function AIAssistant() {
   const bottomRef = useRef(null);
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [appPermissions, setAppPermissions] = useState(DEFAULT_APP_PERMISSIONS);
 
   const suggestedQuestions = [
     "How many candidates?",
@@ -75,6 +79,11 @@ function AIAssistant() {
     }
   }, [sessionId]);
 
+  useEffect(() => {
+    setCurrentUser(getAuthSession());
+    setAppPermissions(loadAppPermissions());
+  }, []);
+
   const ensureSession = async () => {
     if (sessionId) return sessionId;
     console.log('[chat] starting new session');
@@ -105,7 +114,11 @@ function AIAssistant() {
   }, []);
 
   const handleSend = async (textOverride = null) => {
-    const text = textOverride || input.trim();
+    // If this was invoked as an event handler, ignore the event object
+    if (textOverride && typeof textOverride === 'object' && !String(textOverride)) {
+      textOverride = null;
+    }
+    const text = (typeof textOverride === 'string' ? textOverride : input || '').trim();
     if (!text) return;
 
     const userMsg = {
@@ -209,12 +222,22 @@ function AIAssistant() {
   };
 
   const renderMessageContent = (text) => {
+    // Normalize non-string values so we can safely call string methods
+    let content = text;
+    if (typeof content !== 'string') {
+      try {
+        content = JSON.stringify(content, null, 2);
+      } catch (e) {
+        content = String(content);
+      }
+    }
+
     // Check if it's a table-like structure (SQL results often have | or ----)
-    const isTable = text.includes('|') && (text.includes('---') || text.includes('candidate') || text.includes('name') || text.includes('email'));
-    
+    const isTable = content.includes('|') && (content.includes('---') || content.includes('candidate') || content.includes('name') || content.includes('email'));
+
     if (isTable) {
       // Try to parse and render as HTML table
-      return <SQLTable content={text} />;
+      return <SQLTable content={content} />;
     }
 
     return (
@@ -233,7 +256,7 @@ function AIAssistant() {
           }
         }}
       >
-        {text}
+        {content}
       </ReactMarkdown>
     );
   };
@@ -282,6 +305,23 @@ function AIAssistant() {
       setSchemaRefreshing(false);
     }
   };
+
+  if (!appPermissions.allowAIService) {
+    return (
+      <div className="app-layout">
+        <Sidebar isOpen={isSidebarOpen} />
+        <div className={`app-content ${isSidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}>
+          <TopBar toggleSidebar={toggleSidebar} />
+          <main className="ai-main">
+            <div className="ai-disabled-panel">
+              <h3>AI Assistant Disabled</h3>
+              <p>The AI service is currently turned off by the director.</p>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="app-layout">

@@ -20,6 +20,7 @@ import com.example.demo.service.CandidateService;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.Value;
 
 @RestController
 @RequestMapping("/api/v1/candidates")
@@ -29,6 +30,9 @@ public class CandidateController {
 
     private static final Logger logger = LoggerFactory.getLogger(CandidateController.class);
     private final CandidateService candidateService;
+
+    @org.springframework.beans.factory.annotation.Value("${spring.datasource.url}")
+    private String db_url;
 
     private void logApiHit(String method, String endpoint, Object... params) {
         String paramStr = params.length > 0 ? " | Params: " + java.util.Arrays.toString(params) : "";
@@ -106,6 +110,8 @@ public class CandidateController {
     public ResponseEntity<Page<CandidateResponseDto>> getAllCandidates(
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC)
             Pageable pageable) {
+
+                logger.info("DB Connection URL: {}", db_url);
         logApiHit("GET", "/api/v1/candidates", "page=" + pageable.getPageNumber() + ", size=" + pageable.getPageSize());
         try {
             long start = System.currentTimeMillis();

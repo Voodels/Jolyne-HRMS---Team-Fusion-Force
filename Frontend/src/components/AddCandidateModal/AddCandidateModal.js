@@ -2,88 +2,48 @@
 import { useState, useEffect } from 'react';
 import Loader from '../Loader/Loader';
 import './AddCandidateModal.css';
+import { getJobTitles } from '../../api/jobApi';
 
 const BASE_URL = process.env.REACT_APP_API_BASE_URL;
 
-const getInitialFormState = () => ({
-  // ===== BASIC =====
+const INITIAL_FORM = {
   name: '',
-  fullName: '',
   firstName: '',
   middleName: '',
   lastName: '',
   email: '',
-  phone: '',
-  alternatePhone: '',
-  dateOfBirth: '',
-  gender: '',
-
-  // ===== LOCATION =====
-  addressFull: '',
-  city: '',
-  state: '',
-  country: '',
-  pincode: '',
-  location: '',
-
-  // ===== LINKS =====
-  linkedinUrl: '',
-  githubUrl: '',
-  portfolioUrl: '',
-  websiteUrl: '',
-  otherLinks: [],
-
-  // ===== SUMMARY =====
-  summaryText: '',
-  careerObjective: '',
-
-  // ===== PROFESSIONAL =====
-  yearsOfExperience: 0,
-  totalExperienceYears: 0,
-  currentJobTitle: '',
-  currentCompany: '',
-  currentCtc: '',
-  highestEducation: '',
-  primarySkill: '',
-  domain: '',
   department: '',
-  jobTitle: '',
-
-  // ===== ARRAYS (IMPORTANT) =====
-  educationDetails: [],
-  experienceDetails: [],
-  projects: [],
-  skillsDetailed: [],
-  achievements: [],
-  certifications: [],
-  positions: [],
-  codingProfiles: [],
-  languages: [],
-  publications: [],
-  activities: [],
-  sectionName: [],
-  sectionData: [],
-
-  // ===== PIPELINE =====
-  currentStage: 'APPLIED',
-
-  // ===== UI FIELDS =====
-  skills: '',
-
-  // ===== FILE =====
-  resume: null
-});
+  resume: null,
+  // keep other fields if needed but initialize minimally
+  resumeUrl: '',
+  activeJob: '',
+  currentStage: 'APPLIED'
+};
 
 function AddCandidateModal({ isOpen, onClose, onAdd, editData }) {
 
-  const [form, setForm] = useState(getInitialFormState());
+  const [form, setForm] = useState(INITIAL_FORM);
 
   const [resumeUrl, setResumeUrl] = useState('');
   const [uploading, setUploading] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [jobOptions, setJobOptions] = useState([]);
 
   const isEdit = !!editData;
+
+  useEffect(() => {
+    const loadJobOptions = async () => {
+      try {
+        const titles = await getJobTitles();
+        setJobOptions(titles);
+      } catch (err) {
+        console.error('Failed to load job options', err);
+      }
+    };
+
+    loadJobOptions();
+  }, []);
 
   // ---------------- PREFILL ----------------
   useEffect(() => {
@@ -116,7 +76,7 @@ function AddCandidateModal({ isOpen, onClose, onAdd, editData }) {
   if (!isOpen) return null;
 
   // ---------------- INPUT ----------------
-  const handleChange = (e) => {
+  const handleChange = async (e) => {
     const { name, value, files } = e.target;
 
     if (name === 'resume') {
@@ -124,8 +84,8 @@ function AddCandidateModal({ isOpen, onClose, onAdd, editData }) {
       setForm({ ...form, resume: file });
 
       // 🔥 Upload + Parse both
-      handleFileUpload(file);
-      parseResume(file);
+      await handleFileUpload(file);
+      await parseResume(file);
 
     } else {
       setForm({ ...form, [name]: value });
@@ -151,6 +111,7 @@ function AddCandidateModal({ isOpen, onClose, onAdd, editData }) {
 
       console.log("Cloudinary URL:", url);
       setResumeUrl(url);
+      setForm(prev => ({ ...prev, resumeUrl: url }));
 
     } catch (err) {
       console.error(err);
@@ -176,7 +137,7 @@ const parseResume = async (file) => {
     const data = await res.json();
     console.log("Affinda Response:", data);
 
-    const parsed = data?.data || {};
+    const parsed = data?.data || data || {};
 
     // ================= BASIC =================
     const name =
@@ -239,6 +200,7 @@ const lastName = parsed?.lastName || "";
       "";
 
     const domain = parsed?.domain || "";
+    const activeJob = parsed?.activeJob || "";
 
     // ================= EXPERIENCE =================
     const totalExperienceYears = parsed?.totalExperienceYears || 0;
@@ -317,6 +279,7 @@ const lastName = parsed?.lastName || "";
 
       currentJobTitle: prev.currentJobTitle || jobTitle,
       currentCompany: prev.currentCompany || currentCompany,
+      activeJob: prev.activeJob || activeJob,
       domain: prev.domain || domain,
 
       highestEducation: prev.highestEducation || highestEducation,
@@ -360,83 +323,12 @@ const handleSubmit = async (e) => {
   try {
     setLoading(true);
 
-    const payload = {
-      // ---------------- BASIC ----------------
-      firstName: form.firstName,
-      middleName: form.middleName,
-      lastName: form.lastName,
-      name: form.name,
+    // Send parsed candidate fields to backend so they are persisted
+    const { resume, ...payload } = form;
+    payload.resumeUrl = resumeUrl;
+    payload.currentStage = payload.currentStage || "APPLIED";
 
-      email: form.email,
-      phone: form.phone,
-      alternatePhone: form.alternatePhone,
-      dateOfBirth: form.dateOfBirth,
-      gender: form.gender,
-
-      // ---------------- LOCATION ----------------
-      addressFull: form.addressFull,
-      city: form.city,
-      state: form.state,
-      country: form.country,
-      pincode: form.pincode,
-      location: form.location,
-
-      // ---------------- LINKS ----------------
-      linkedinUrl: form.linkedinUrl,
-      githubUrl: form.githubUrl,
-      portfolioUrl: form.portfolioUrl,
-      websiteUrl: form.websiteUrl,
-      otherLinks: form.otherLinks,
-
-      // ---------------- SUMMARY ----------------
-      summaryText: form.summaryText,
-      careerObjective: form.careerObjective,
-
-      // ---------------- EXPERIENCE ----------------
-      totalExperienceYears: form.totalExperienceYears,
-      yearsOfExperience: form.yearsOfExperience,
-
-      currentJobTitle: form.currentJobTitle,
-      currentCompany: form.currentCompany,
-      domain: form.domain,
-
-      // ---------------- EDUCATION ----------------
-      highestEducation: form.highestEducation,
-      educationDetails: form.educationDetails,
-
-      // ---------------- SKILLS ----------------
-      primarySkill: form.primarySkill,
-      skills: form.skills,                // string (UI)
-      skillsDetailed: form.skillsDetailed, // array (REAL DATA)
-
-      // ---------------- EXPERIENCE DETAILS ----------------
-      experienceDetails: form.experienceDetails,
-
-      // ---------------- PROJECTS ----------------
-      projects: form.projects,
-
-      // ---------------- EXTRA ----------------
-      achievements: form.achievements,
-      certifications: form.certifications,
-      positions: form.positions,
-      codingProfiles: form.codingProfiles,
-      languages: form.languages,
-      publications: form.publications,
-      activities: form.activities,
-
-      // ---------------- SECTION RAW ----------------
-      sectionName: form.sectionName,
-      sectionData: form.sectionData,
-
-      // ---------------- PIPELINE ----------------
-      department: form.department,
-      currentStage: form.currentStage,
-
-      // ---------------- RESUME ----------------
-      resumeUrl: resumeUrl,
-    };
-
-    let url = `${BASE_URL}/candidates/full`;
+    let url = `${BASE_URL}/candidates`;
     let method = "POST";
 
     if (isEdit) {
@@ -457,8 +349,8 @@ const handleSubmit = async (e) => {
     onAdd();
     onClose();
 
-    // ✅ Reset (important for structured forms)
-    setForm(getInitialFormState());
+    // ✅ Reset to initial minimal form
+    setForm(INITIAL_FORM);
     setResumeUrl("");
 
   } catch (err) {
@@ -495,13 +387,28 @@ const handleSubmit = async (e) => {
             onChange={handleChange}
           />
 
-          <input
-            type="text"
-            name="jobTitle"
-            placeholder="Job Role"
-            value={form.jobTitle}
-            onChange={handleChange}
-          />
+          {jobOptions.length > 0 ? (
+            <select
+              name="department"
+              value={form.department}
+              onChange={handleChange}
+              required
+            >
+              <option value="">Select Job Role</option>
+              {jobOptions.map((title) => (
+                <option key={title} value={title}>{title}</option>
+              ))}
+            </select>
+          ) : (
+            <input
+              type="text"
+              name="department"
+              placeholder="Job Role"
+              value={form.department}
+              onChange={handleChange}
+              required
+            />
+          )}
 
           {/* <input
             type="text"

@@ -243,6 +243,8 @@ function Dashboard() {
             </div>
           </div>
 
+          {error && <div className="dashboard-error">{error}</div>}
+
           <div className="stats-grid">
             {loading ? (
               <div className="dashboard-loader">
@@ -261,12 +263,6 @@ function Dashboard() {
               ))
             )}
           </div>
-
-          {error && (
-            <div className="dashboard-error">
-              {error}
-            </div>
-          )}
 
           <div className="dashboard-bottom">
             <div className="pipeline-card">

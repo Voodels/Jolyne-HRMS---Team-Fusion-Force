@@ -3,6 +3,7 @@ import Sidebar from '../Sidebar/Sidebar';
 import TopBar from '../TopBar/TopBar';
 import Loader from '../Loader/Loader';
 import { useState, useEffect } from 'react';
+import { getJobTitles } from '../../api/jobApi';
 import './Pipeline.css';
 
 // ✅ ENV
@@ -15,6 +16,8 @@ function Pipeline() {
   const [search, setSearch] = useState('');
   const [jobFilter, setJobFilter] = useState('All Jobs');
   const [stageFilter, setStageFilter] = useState('All Stages');
+    const [sortBy, setSortBy] = useState('Latest');
+  const [jobOptions, setJobOptions] = useState(['All Jobs']);
 
   const [candidates, setCandidates] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -56,6 +59,21 @@ function Pipeline() {
 
   useEffect(() => {
     fetchCandidates();
+  }, []);
+
+  // Fetch job titles for dropdown
+  useEffect(() => {
+    const fetchJobTitles = async () => {
+      try {
+        const titles = await getJobTitles();
+        setJobOptions(['All Jobs', ...titles]);
+      } catch (err) {
+        console.error('Failed to load job titles', err);
+        setJobOptions(['All Jobs']);
+      }
+    };
+
+    fetchJobTitles();
   }, []);
 
   // ---------------- STAGE FORMAT ----------------
@@ -133,7 +151,27 @@ function Pipeline() {
             <h2 className="pipeline-title">Hiring Pipeline</h2>
 
             <div className="pipeline-header-right">
-              <div className="search-box">
+
+              <select value={jobFilter} onChange={(e) => setJobFilter(e.target.value)}>
+                {jobOptions.map(job => (
+                  <option key={job} value={job}>{job}</option>
+                ))}
+              </select>
+
+              <select onChange={(e) => setStageFilter(e.target.value)}>
+                <option>All Stages</option>
+                <option>Applied</option>
+                <option>Shortlisted</option>
+                <option>Selected</option>
+              </select>
+
+                <select className="filter-select" onChange={(e) => setSortBy(e.target.value)}>
+                  <option value="Latest">Sort: Latest</option>
+                  <option value="Oldest">Sort: Oldest</option>
+                  <option value="Name">Sort: Name</option>
+                </select>
+
+               <div className="search-box">
                 <span>🔍</span>
                 <input
                   type="text"
@@ -143,19 +181,6 @@ function Pipeline() {
                 />
               </div>
 
-              <select onChange={(e) => setJobFilter(e.target.value)}>
-                <option>All Jobs</option>
-                <option>ENGINEERING</option>
-                <option>HR</option>
-                <option>SALES</option>
-              </select>
-
-              <select onChange={(e) => setStageFilter(e.target.value)}>
-                <option>All Stages</option>
-                <option>Applied</option>
-                <option>Shortlisted</option>
-                <option>Selected</option>
-              </select>
             </div>
           </div>
 

@@ -1,5 +1,6 @@
 package com.example.demo.repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 import org.springframework.data.domain.Page;
@@ -20,6 +21,12 @@ public interface CandidateRepository extends JpaRepository<Candidate, Long> {
 
 	// Find candidates by their current pipeline stage
 	List<Candidate> findByCurrentStage(PipelineStage stage);
+
+	// Count candidates by stage
+	long countByCurrentStage(PipelineStage stage);
+
+	// Candidates created after a given timestamp
+	List<Candidate> findByCreatedAtAfter(LocalDateTime from);
 
 	// Paginated search by skills (case-insensitive)
 	Page<Candidate> findBySkillsContainingIgnoreCase(String skill, Pageable pageable);

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import "./TopBar.css";
 
 function TopBar({ 
@@ -6,6 +7,7 @@ function TopBar({
   notifications = [], 
   clearNotifications = () => {}   // ✅ SAFE FALLBACK
 }) {
+  const navigate = useNavigate();
   const [showPanel, setShowPanel] = useState(false);
   const [readMap, setReadMap] = useState({});
 
@@ -121,7 +123,10 @@ function TopBar({
           )}
         </div>
 
-        <button className="topbar-icon-btn profile-btn">👤</button>
+        <button
+          className="topbar-icon-btn profile-btn"
+          onClick={() => navigate('/settings')}
+        >👤</button>
       </div>
     </header>
   );
